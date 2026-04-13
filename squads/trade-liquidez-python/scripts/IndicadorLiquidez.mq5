@@ -58,13 +58,12 @@ void OnTimer()
 //+------------------------------------------------------------------+
 void UpdateDrawing()
 {
-   int handle = FileOpen(Filename, FILE_READ|FILE_CSV|FILE_ANSI, ',');
+   // Adicionado FILE_SHARE_READ para permitir leitura enquanto o Python escreve
+   int handle = FileOpen(Filename, FILE_READ|FILE_CSV|FILE_ANSI|FILE_SHARE_READ, ',');
    if(handle == INVALID_HANDLE) return;
 
    // Limpa desenhos antigos para atualizar
    ObjectsDeleteAll(0, "LIQ_");
-
-   string header = FileReadString(handle); // Pula header
 
    int i = 0;
    double point = SymbolInfoDouble(_Symbol, SYMBOL_POINT);
@@ -72,10 +71,17 @@ void UpdateDrawing()
    while(!FileIsEnding(handle))
    {
       string type = FileReadString(handle);
-      if(type == "") break;
       
-      double price = StringToDouble(FileReadString(handle));
+      // Pula qualquer tipo de cabeçalho ou linha vazia
+      if(type == "" || type == "HEADER" || type == "type" || type == "DATA") continue;
+      
+      string price_str = FileReadString(handle);
+      if(price_str == "" || price_str == "price") continue;
+      
+      double price = StringToDouble(price_str);
       string time_str = FileReadString(handle);
+      if(time_str == "" || time_str == "time") continue;
+      
       datetime t_start = StringToTime(time_str);
 
       string name = "LIQ_" + (string)i;

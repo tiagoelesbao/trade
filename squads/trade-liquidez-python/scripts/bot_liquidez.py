@@ -35,9 +35,8 @@ INDICATOR_FILE = os.path.join(MT5_DATA_PATH, "MQL5", "Files", "liquidez_data.csv
 def export_dynamic_data(zones, trigger):
     """Exporta as zonas atuais e o sinal pendente para o Indicador MQL5 ler."""
     try:
-        with open(INDICATOR_FILE, "w", encoding="utf-8") as f:
-            # Header: type, price, time
-            f.write("type,price,time\n")
+        with open(INDICATOR_FILE, "w", encoding="ansi") as f:
+            f.write("HEADER\n") # Para o mq5 pular
             for z in zones:
                 f.write(f"ZONE_{z['type']},{z['price']},{z['time']}\n")
             if trigger:
@@ -153,11 +152,19 @@ def check_m5_trigger(df_m5, zones_h1, point, cooldowns, current_time):
     
     total_size, top_wick, bottom_wick = calculate_wick_metrics(last_candle)
     if total_size == 0: return None, None
-    if last_candle['tick_volume'] <= prev_candle['tick_volume']: return None, None
+    
+    # Filtro de Volume (Opcional via Config)
+    if CFG.get('require_volume_momentum', True):
+        if last_candle['tick_volume'] <= prev_candle['tick_volume']: return None, None
 
-    last_is_bull = last_candle['close'] > last_candle['open']
-    prev_is_bull = prev_candle['close'] > prev_candle['open']
-    if last_is_bull == prev_is_bull: return None, None
+    # Filtro de Cor (Opcional via Config)
+    if CFG.get('require_color_reversal', True):
+        last_is_bull = last_candle['close'] > last_candle['open']
+        prev_is_bull = prev_candle['close'] > prev_candle['open']
+        if last_is_bull == prev_is_bull: return None, None
+
+    min_wick = CFG.get('min_wick_pct', 0.30)
+    max_wick = CFG.get('max_wick_pct', 0.70)
 
     for zone in zones_h1:
         price_zone = zone['price']
@@ -169,7 +176,7 @@ def check_m5_trigger(df_m5, zones_h1, point, cooldowns, current_time):
         if zone['type'] == 'RESISTANCE':
             if last_candle['high'] >= price_zone:
                 wick_pct = top_wick / total_size
-                if 0.30 <= wick_pct <= 0.70:
+                if min_wick <= wick_pct <= max_wick:
                     entry_price = last_candle['high'] - (top_wick * ENTRY_RETRACEMENT_PCT)
                     stop_loss = last_candle['high'] + (STOP_BUFFER * point)
                     take_profit = prev_candle['low'] 
@@ -184,7 +191,7 @@ def check_m5_trigger(df_m5, zones_h1, point, cooldowns, current_time):
         elif zone['type'] == 'SUPPORT':
             if last_candle['low'] <= price_zone:
                 wick_pct = bottom_wick / total_size
-                if 0.30 <= wick_pct <= 0.70:
+                if min_wick <= wick_pct <= max_wick:
                     entry_price = last_candle['low'] + (bottom_wick * ENTRY_RETRACEMENT_PCT)
                     stop_loss = last_candle['low'] - (STOP_BUFFER * point)
                     take_profit = prev_candle['high']

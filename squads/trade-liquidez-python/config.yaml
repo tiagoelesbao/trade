@@ -9,3 +9,9 @@ min_displacement_candles: 7
 stop_buffer_points: 5
 symbol: EURUSD
 zone_merge_points: 50
+
+# --- NOVOS FILTROS DE FLEXIBILIDADE ---
+require_volume_momentum: false  # Se true, exige volume > anterior
+require_color_reversal: true   # Se true, exige fechamento de cor oposta à anterior
+min_wick_pct: 0.30             # Percentual mínimo de pavio
+max_wick_pct: 0.70             # Percentual máximo de pavio
