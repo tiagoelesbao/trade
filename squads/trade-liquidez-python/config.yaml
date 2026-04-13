@@ -14,4 +14,10 @@ zone_merge_points: 50
 require_volume_momentum: false  # Se true, exige volume > anterior
 require_color_reversal: true   # Se true, exige fechamento de cor oposta à anterior
 min_wick_pct: 0.30             # Percentual mínimo de pavio
-max_wick_pct: 0.70             # Percentual máximo de pavio
+# --- GESTÃO DE META DIÁRIA ---
+daily_profit_target: 100.0     # Meta de lucro em USD para parar o robô
+daily_max_loss: 50.0          # Limite de perda em USD para parar o robô
+# --- FILTRO DE CONSENSO AGÊNTICO ---
+use_agent_consensus: true     # Se true, espera aprovação da IA no Supabase antes de operar
+consensus_timeout_secs: 30    # Tempo máximo de espera pela resposta dos agentes
+consensus_min_votes: 1        # Mínimo de agentes que precisam aprovar (futuro)

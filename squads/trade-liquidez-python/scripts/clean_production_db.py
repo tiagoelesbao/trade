@@ -8,7 +8,7 @@ env_path = os.path.join(project_root, ".env")
 load_dotenv(env_path)
 
 # Chaves necessárias para operação administrativa (Delete)
-url = os.getenv("NEXT_PUBLIC_SUPABASE_URL")
+url = os.getenv("SUPABASE_URL") or os.getenv("NEXT_PUBLIC_SUPABASE_URL")
 key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") # Service Role é necessária para DELETE sem RLS bypass
 
 if not url or not key:
@@ -25,17 +25,20 @@ def clean_production_db():
     print("="*60)
     
     try:
-        # 1. Limpar Sinais de Teste (SIMULADO)
-        # Buscamos sinais que contenham "SIMULADO" no comentário
-        res_signals = supabase.table("signals_liquidez").delete().ilike("comment", "%SIMULADO%").execute()
+        # 1. Limpar Sinais de Teste
+        # Como não temos coluna 'comment', limpamos sinais 'pending' de EURUSD (padrão de teste)
+        # Se você quiser limpar TUDO para começar do zero, use .delete().neq("symbol", "NONE")
+        res_signals = supabase.table("signals_liquidez").delete().eq("status", "pending").execute()
         count_signals = len(res_signals.data) if res_signals.data else 0
-        print(f"✅ Sinais 'SIMULADO' removidos: {count_signals}")
+        print(f"✅ Sinais de teste (pending) removidos: {count_signals}")
         
         # 2. Limpar Heartbeats de Teste
-        # Removemos heartbeats que não sejam da operação real (ex: de scripts de teste)
-        res_hb = supabase.table("bot_heartbeats").delete().neq("status", "running").execute()
+        # Removemos todos os heartbeats para o dashboard resetar o status do robô
+        res_hb = supabase.table("bot_heartbeats").delete().neq("symbol", "NONE").execute()
         count_hb = len(res_hb.data) if res_hb.data else 0
-        print(f"✅ Heartbeats de teste (não-running) removidos: {count_hb}")
+        print(f"✅ Heartbeats de teste removidos: {count_hb}")
+        
+        print("\n✨ Banco de dados limpo e pronto para a sessão real!")
         
         # 3. Limpar Logs de ML de Teste (se existirem na nuvem futuramente)
         # print("Opcional: Limpando logs de ML temporários...")

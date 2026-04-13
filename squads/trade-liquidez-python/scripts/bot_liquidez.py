@@ -3,7 +3,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 import time
 import pytz
-
+import sys
 import yaml
 import os
 
@@ -36,7 +36,7 @@ def export_dynamic_data(zones, trigger):
     """Exporta as zonas atuais e o sinal pendente para o Indicador MQL5 ler."""
     try:
         with open(INDICATOR_FILE, "w", encoding="ansi") as f:
-            f.write("HEADER\n") # Para o mq5 pular
+            f.write("HEADER\n") 
             for z in zones:
                 f.write(f"ZONE_{z['type']},{z['price']},{z['time']}\n")
             if trigger:
@@ -67,23 +67,19 @@ def get_validated_h1_zones(df_h1, point):
     zones = []
     if df_h1 is None or len(df_h1) < MIN_DISPLACEMENT_CANDLES + 1:
         return zones
-
     raw_zones = []
     for i in range(len(df_h1) - MIN_DISPLACEMENT_CANDLES - 1):
         high, low = df_h1.iloc[i]['high'], df_h1.iloc[i]['low']
-        
         is_resistance = True
         for j in range(1, MIN_DISPLACEMENT_CANDLES + 1):
             if df_h1.iloc[i+j]['high'] > high:
                 is_resistance = False; break
         if is_resistance: raw_zones.append({'type': 'RESISTANCE', 'price': high, 'time': df_h1.iloc[i]['time'], 'idx': i})
-
         is_support = True
         for j in range(1, MIN_DISPLACEMENT_CANDLES + 1):
             if df_h1.iloc[i+j]['low'] < low:
                 is_support = False; break
         if is_support: raw_zones.append({'type': 'SUPPORT', 'price': low, 'time': df_h1.iloc[i]['time'], 'idx': i})
-
     valid_zones = []
     for z in raw_zones:
         invalidated = False
@@ -94,9 +90,7 @@ def get_validated_h1_zones(df_h1, point):
                 invalidated = True; break
             if z['type'] == 'SUPPORT' and c_close < z['price'] and c_open < z['price']:
                 invalidated = True; break
-        if not invalidated:
-            valid_zones.append({'type': z['type'], 'price': z['price'], 'time': z['time']})
-
+        if not invalidated: valid_zones.append({'type': z['type'], 'price': z['price'], 'time': z['time']})
     merged_zones = []
     merge_threshold = ZONE_MERGE_POINTS * point
     for z in valid_zones:
@@ -107,235 +101,171 @@ def get_validated_h1_zones(df_h1, point):
                 else: mz['price'] = min(mz['price'], z['price'])
                 merged = True; break
         if not merged: merged_zones.append(z)
-
     return merged_zones
 
 def calculate_wick_metrics(candle):
-    """Calcula tamanho do pavio e corpo em percentual."""
-    high = candle['high']
-    low = candle['low']
-    open_p = candle['open']
-    close_p = candle['close']
+    high, low, open_p, close_p = candle['high'], candle['low'], candle['open'], candle['close']
     total_size = high - low
     if total_size == 0: return 0, 0, 0
-    
-    body_size = abs(close_p - open_p)
     top_wick = high - max(open_p, close_p)
     bottom_wick = min(open_p, close_p) - low
-    
     return total_size, top_wick, bottom_wick
 
 def log_ml_features(trigger, zone, last_candle, prev_candle, total_size, top_wick, bottom_wick):
-    """Grava as nuances quantitativas de uma entrada recém descoberta para Treino futuro"""
     csv_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "ml_dataset.csv")
     file_exists = os.path.isfile(csv_path)
-    
     with open(csv_path, "a", encoding="utf-8") as f:
-        # Header
         if not file_exists:
             f.write("time,magic,direction,body_size,top_wick_pct,bottom_wick_pct,volume_momentum,distance_to_zone\n")
-            
         direction = 1 if trigger['type'] == mt5.ORDER_TYPE_BUY_LIMIT else -1
         top_pct = round(top_wick / total_size, 3) if total_size > 0 else 0
         bot_pct = round(bottom_wick / total_size, 3) if total_size > 0 else 0
-        vol_momentum = last_candle['tick_volume'] - prev_candle['tick_volume'] # O quanto maior foi
+        vol_momentum = last_candle['tick_volume'] - prev_candle['tick_volume']
         dist_zone = round(abs(last_candle['close'] - zone['price']), 5)
-        
         f.write(f"{last_candle['time']},{MAGIC_NUMBER},{direction},{total_size:.5f},{top_pct},{bot_pct},{vol_momentum},{dist_zone:.5f}\n")
 
 def check_m5_trigger(df_m5, zones_h1, point, cooldowns, current_time):
-    """Monitora anatomia, volume, violinação e cooldown."""
     if df_m5 is None or len(df_m5) < 2 or not zones_h1: return None, None
-
-    last_candle = df_m5.iloc[-2] # Candle fechado
+    last_candle = df_m5.iloc[-2]
     prev_candle = df_m5.iloc[-3]
-    
     total_size, top_wick, bottom_wick = calculate_wick_metrics(last_candle)
     if total_size == 0: return None, None
-    
-    # Filtro de Volume (Opcional via Config)
     if CFG.get('require_volume_momentum', True):
         if last_candle['tick_volume'] <= prev_candle['tick_volume']: return None, None
-
-    # Filtro de Cor (Opcional via Config)
     if CFG.get('require_color_reversal', True):
         last_is_bull = last_candle['close'] > last_candle['open']
         prev_is_bull = prev_candle['close'] > prev_candle['open']
         if last_is_bull == prev_is_bull: return None, None
-
-    min_wick = CFG.get('min_wick_pct', 0.30)
-    max_wick = CFG.get('max_wick_pct', 0.70)
-
+    min_wick, max_wick = CFG.get('min_wick_pct', 0.30), CFG.get('max_wick_pct', 0.70)
     for zone in zones_h1:
         price_zone = zone['price']
         z_key = f"{zone['type']}_{round(price_zone, 5)}"
-        
         if z_key in cooldowns and current_time - cooldowns[z_key] < timedelta(minutes=5 * COOLDOWN_CANDLES):
             continue
-        
-        if zone['type'] == 'RESISTANCE':
-            if last_candle['high'] >= price_zone:
-                wick_pct = top_wick / total_size
-                if min_wick <= wick_pct <= max_wick:
-                    entry_price = last_candle['high'] - (top_wick * ENTRY_RETRACEMENT_PCT)
-                    stop_loss = last_candle['high'] + (STOP_BUFFER * point)
-                    take_profit = prev_candle['low'] 
-                    trigger = {
-                        'type': mt5.ORDER_TYPE_SELL_LIMIT, 'price': entry_price,
-                        'sl': stop_loss, 'tp': take_profit, 'comment': "Liquidez Resistência"
-                    }
-                    log_ml_features(trigger, zone, last_candle, prev_candle, total_size, top_wick, bottom_wick)
-                    db_manager.log_signal(trigger, wick_pct)
-                    return trigger, zone
-
-        elif zone['type'] == 'SUPPORT':
-            if last_candle['low'] <= price_zone:
-                wick_pct = bottom_wick / total_size
-                if min_wick <= wick_pct <= max_wick:
-                    entry_price = last_candle['low'] + (bottom_wick * ENTRY_RETRACEMENT_PCT)
-                    stop_loss = last_candle['low'] - (STOP_BUFFER * point)
-                    take_profit = prev_candle['high']
-                    trigger = {
-                        'type': mt5.ORDER_TYPE_BUY_LIMIT, 'price': entry_price,
-                        'sl': stop_loss, 'tp': take_profit, 'comment': "Liquidez Suporte"
-                    }
-                    log_ml_features(trigger, zone, last_candle, prev_candle, total_size, top_wick, bottom_wick)
-                    db_manager.log_signal(trigger, wick_pct)
-                    return trigger, zone
-                    
+        if zone['type'] == 'RESISTANCE' and last_candle['high'] >= price_zone:
+            wick_pct = top_wick / total_size
+            if min_wick <= wick_pct <= max_wick:
+                entry_price = last_candle['high'] - (top_wick * ENTRY_RETRACEMENT_PCT)
+                trigger = {'type': mt5.ORDER_TYPE_SELL_LIMIT, 'price': entry_price, 'sl': last_candle['high'] + (STOP_BUFFER * point), 'tp': prev_candle['low'], 'comment': "Liquidez Resistencia"}
+                log_ml_features(trigger, zone, last_candle, prev_candle, total_size, top_wick, bottom_wick)
+                return trigger, zone
+        elif zone['type'] == 'SUPPORT' and last_candle['low'] <= price_zone:
+            wick_pct = bottom_wick / total_size
+            if min_wick <= wick_pct <= max_wick:
+                entry_price = last_candle['low'] + (bottom_wick * ENTRY_RETRACEMENT_PCT)
+                trigger = {'type': mt5.ORDER_TYPE_BUY_LIMIT, 'price': entry_price, 'sl': last_candle['low'] - (STOP_BUFFER * point), 'tp': prev_candle['high'], 'comment': "Liquidez Suporte"}
+                log_ml_features(trigger, zone, last_candle, prev_candle, total_size, top_wick, bottom_wick)
+                return trigger, zone
     return None, None
 
 def send_limit_order(order_data):
-    """
-    Task: Envio de Ordem Limitada (send-order-limit)
-    """
     request = {
-        "action": mt5.TRADE_ACTION_PENDING,
-        "symbol": SYMBOL,
-        "volume": 1.0, # Lote padrão (ajustar conforme risco)
-        "type": order_data['type'],
-        "price": order_data['price'],
-        "sl": order_data['sl'],
-        "tp": order_data['tp'],
-        "magic": MAGIC_NUMBER,
-        "comment": order_data['comment'],
-        "type_time": mt5.ORDER_TIME_GTC,
-        "type_filling": mt5.ORDER_FILLING_RETURN,
+        "action": mt5.TRADE_ACTION_PENDING, "symbol": SYMBOL, "volume": CFG.get('lot_size', 1.0),
+        "type": order_data['type'], "price": order_data['price'], "sl": order_data['sl'], "tp": order_data['tp'],
+        "magic": MAGIC_NUMBER, "comment": order_data['comment'], "type_time": mt5.ORDER_TIME_GTC, "type_filling": mt5.ORDER_FILLING_RETURN,
     }
-    
     result = mt5.order_send(request)
-    if result.retcode != mt5.TRADE_RETCODE_DONE:
-        print(f"Erro ao enviar ordem: {result.comment} ({result.retcode})")
-    else:
-        print(f"Ordem {order_data['comment']} enviada: {order_data['price']}")
+    if result.retcode != mt5.TRADE_RETCODE_DONE: print(f"Erro ao enviar ordem: {result.comment} ({result.retcode})")
+    else: print(f"Ordem {order_data['comment']} enviada: {order_data['price']}")
     return result
 
+def get_daily_pnl():
+    from_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    to_date = datetime.now()
+    deals = mt5.history_deals_get(from_date, to_date, group=f"*{SYMBOL}*")
+    if deals is None: return 0.0
+    daily_pnl = 0.0
+    for deal in deals:
+        if deal.magic == MAGIC_NUMBER:
+            daily_pnl += (deal.profit + deal.commission + deal.swap)
+    return daily_pnl
+
+def check_session_limits(current_pnl):
+    target = CFG.get('daily_profit_target', 100.0)
+    max_loss = CFG.get('daily_max_loss', 50.0)
+    if current_pnl >= target:
+        print(f"\n[META BATIDA] Lucro: ${current_pnl:.2f} (Alvo: ${target:.2f})")
+        return True, "target_hit"
+    if current_pnl <= -max_loss:
+        print(f"\n[STOP DIARIO] Perda: ${current_pnl:.2f} (Limite: -${max_loss:.2f})")
+        return True, "stop_hit"
+    return False, "running"
+
+def wait_for_agent_consensus(signal_id):
+    timeout = CFG.get('consensus_timeout_secs', 30)
+    start_time = time.time()
+    print(f"[CONSENSO] Aguardando agentes para sinal {signal_id}...")
+    while (time.time() - start_time) < timeout:
+        try:
+            res = db_manager.client.table("signals_liquidez").select("status").eq("id", signal_id).execute()
+            if res.data:
+                status = res.data[0]['status']
+                if status == 'approved': return True
+                if status == 'rejected': return False
+        except: pass
+        time.sleep(2)
+    print(f"⚠️ TIMEOUT: Agentes nao responderam.")
+    return False
+
 def manage_active_trades():
-    """
-    Monitoramento Misto: Saída por tempo (6 candles) + Breakeven (3 candles).
-    """
     positions = mt5.positions_get(magic=MAGIC_NUMBER)
     if positions:
         for pos in positions:
-            time_open = datetime.fromtimestamp(pos.time, tz=pytz.utc)
-            now = datetime.now(pytz.utc)
-            duration_minutes = (now - time_open).total_seconds() / 60
-            
-            # 6 candles M5 = Saída por Tempo Final
+            duration_minutes = (datetime.now(pytz.utc) - datetime.fromtimestamp(pos.time, tz=pytz.utc)).total_seconds() / 60
             if duration_minutes >= (EXIT_CANDLES_MAX * 5):
-                print(f"Expirando posição {pos.ticket} por tempo (6 candles).")
-                close_request = {
-                    "action": mt5.TRADE_ACTION_DEAL,
-                    "symbol": pos.symbol,
-                    "volume": pos.volume,
-                    "type": mt5.ORDER_TYPE_BUY if pos.type == mt5.ORDER_TYPE_SELL else mt5.ORDER_TYPE_SELL,
-                    "position": pos.ticket,
-                    "magic": MAGIC_NUMBER,
-                    "comment": "Saída Temporal 6-Candles",
-                    "type_time": mt5.ORDER_TIME_GTC,
-                    "type_filling": mt5.ORDER_FILLING_RETURN,
-                }
-                mt5.order_send(close_request)
-                continue
-                
-            # 3 candles = Breakeven
-            if duration_minutes >= (BREAKEVEN_CANDLES * 5):
+                mt5.order_send({"action": mt5.TRADE_ACTION_DEAL, "symbol": pos.symbol, "volume": pos.volume, "type": mt5.ORDER_TYPE_BUY if pos.type == mt5.ORDER_TYPE_SELL else mt5.ORDER_TYPE_SELL, "position": pos.ticket, "magic": MAGIC_NUMBER, "comment": "Saida Temporal", "type_time": mt5.ORDER_TIME_GTC, "type_filling": mt5.ORDER_FILLING_RETURN})
+            elif duration_minutes >= (BREAKEVEN_CANDLES * 5):
                 point = mt5.symbol_info(pos.symbol).point
-                spread_safety = 10 * point
                 new_sl = None
-
-                if pos.type == mt5.ORDER_TYPE_BUY and pos.price_current > pos.price_open:
-                    if pos.sl < pos.price_open: # Se não moveu pro zero a zero
-                        new_sl = pos.price_open + spread_safety
-                elif pos.type == mt5.ORDER_TYPE_SELL and pos.price_current < pos.price_open:
-                    if pos.sl > pos.price_open or pos.sl == 0:
-                        new_sl = pos.price_open - spread_safety
-                        
-                if new_sl is not None:
-                    print(f"Acionando Breakeven para posição {pos.ticket}. Movendo SL para {new_sl}")
-                    sl_request = {
-                        "action": mt5.TRADE_ACTION_SLTP,
-                        "position": pos.ticket,
-                        "symbol": pos.symbol,
-                        "sl": new_sl,
-                        "tp": pos.tp,
-                        "magic": MAGIC_NUMBER
-                    }
-                    mt5.order_send(sl_request)
+                if pos.type == mt5.ORDER_TYPE_BUY and pos.price_current > pos.price_open and pos.sl < pos.price_open: new_sl = pos.price_open + (10 * point)
+                elif pos.type == mt5.ORDER_TYPE_SELL and pos.price_current < pos.price_open and (pos.sl > pos.price_open or pos.sl == 0): new_sl = pos.price_open - (10 * point)
+                if new_sl: mt5.order_send({"action": mt5.TRADE_ACTION_SLTP, "position": pos.ticket, "symbol": pos.symbol, "sl": new_sl, "tp": pos.tp, "magic": MAGIC_NUMBER})
 
 def main():
-    if not initialize_mt5():
-        return
-
-    print(f"Monitorando {SYMBOL} em M5 com contexto H1...")
-    
+    if not initialize_mt5(): return
+    print(f"Monitorando {SYMBOL} | Meta: ${CFG.get('daily_profit_target')} | Consenso: {CFG.get('use_agent_consensus')}")
     try:
         cooldowns = {}
         while True:
-            # Ponto de Cálculo e Offset dinâmico
             point = mt5.symbol_info(SYMBOL).point
             last_price = mt5.symbol_info_tick(SYMBOL).bid
             now_utc = datetime.now(pytz.utc)
             
-            # Limpa Terminal e Mostra Dashboard
+            pnl = get_daily_pnl()
+            stop_needed, status_str = check_session_limits(pnl)
+            
             os.system('cls' if os.name == 'nt' else 'clear')
             print("="*60)
-            print(f" SQUAD LIQUIDEZ: DASHBOARD OPERACIONAL | {now_utc.strftime('%H:%M:%S')} ")
-            print(f" DASHBOARD CLOUD: http://localhost:3000 ")
+            print(f" SQUAD LIQUIDEZ | {now_utc.strftime('%H:%M:%S')} | P&L DIA: ${pnl:.2f} | STATUS: {status_str.upper()}")
             print("="*60)
-            print(f" ATIVO: {SYMBOL} | PRECO: {last_price:.5f} ")
             
-            # 1. Validação de Contexto H1
+            if stop_needed and CFG.get('stop_after_target', True):
+                db_manager.log_heartbeat(SYMBOL, status_str, 0)
+                break
+
             df_h1 = get_rates(SYMBOL, TIMEFRAME_H1, LOOKBACK_H1)
             zones_h1 = get_validated_h1_zones(df_h1, point)
-            
-            print(f" ZONAS H1 ATIVAS: {len(zones_h1)}")
-            
-            # 2. Detecção de Gatilho M5
             df_m5 = get_rates(SYMBOL, TIMEFRAME_M5, 10)
             trigger, z_triggered = check_m5_trigger(df_m5, zones_h1, point, cooldowns, now_utc)
             
-            if trigger:
-                if not mt5.orders_get(magic=MAGIC_NUMBER) and not mt5.positions_get(magic=MAGIC_NUMBER):
+            if trigger and not mt5.orders_get(magic=MAGIC_NUMBER) and not mt5.positions_get(magic=MAGIC_NUMBER):
+                if CFG.get('use_agent_consensus', False):
+                    # No consensus, calculamos wick_pct aqui para logar
+                    total, top, bot = calculate_wick_metrics(df_m5.iloc[-2])
+                    wick_pct = top/total if trigger['type'] == mt5.ORDER_TYPE_SELL_LIMIT else bot/total
+                    res = db_manager.log_signal(trigger, wick_pct, status="awaiting_consensus")
+                    if res and res.data and wait_for_agent_consensus(res.data[0]['id']):
+                        send_limit_order(trigger)
+                else:
                     send_limit_order(trigger)
-                    z_key = f"{z_triggered['type']}_{round(z_triggered['price'], 5)}"
-                    cooldowns[z_key] = now_utc
+                cooldowns[f"{z_triggered['type']}_{round(z_triggered['price'], 5)}"] = now_utc
 
-            # 3. Cloud Sync & Heartbeat
             db_manager.log_heartbeat(SYMBOL, "scanning", len(zones_h1))
             export_dynamic_data(zones_h1, trigger)
-            
-            # 4. Gestões Livres
             manage_active_trades()
-            
-            print("="*60)
-            print(" AGUARDANDO PROXIMO SCAN (60s)... ")
             time.sleep(60)
-            
-    except KeyboardInterrupt:
-        print("Robô encerrado pelo usuário.")
-    finally:
-        mt5.shutdown()
+    except KeyboardInterrupt: pass
+    finally: mt5.shutdown()
 
 if __name__ == "__main__":
     main()

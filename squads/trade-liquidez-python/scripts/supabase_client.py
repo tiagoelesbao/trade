@@ -41,9 +41,9 @@ class SupabaseManager:
             else:
                 print(f"[Supabase] Erro ao enviar heartbeat: {e}")
 
-    def log_signal(self, order_data, wick_pct):
+    def log_signal(self, order_data, wick_pct, status="pending"):
         """Registra um novo sinal de liquidez."""
-        if not self.client: return
+        if not self.client: return None
         try:
             data = {
                 "symbol": order_data.get('symbol', 'EURUSD'),
@@ -53,11 +53,12 @@ class SupabaseManager:
                 "tp": order_data['tp'],
                 "magic": 123456,
                 "wick_pct": wick_pct,
-                "status": "pending"
+                "status": status
             }
-            self.client.table("signals_liquidez").insert(data).execute()
+            return self.client.table("signals_liquidez").insert(data).execute()
         except Exception as e:
             if "PGRST205" in str(e) or "not find the table" in str(e).lower():
                 print("[Supabase ALERT] Tabela 'signals_liquidez' ausente. Rode o SQL Editor no painel Supabase.")
             else:
                 print(f"[Supabase] Erro ao registrar sinal: {e}")
+            return None
