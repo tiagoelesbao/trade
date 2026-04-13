@@ -1,0 +1,11 @@
+breakeven_candles: 4
+cooldown_candles: 12
+entry_retracement_pct: 0.4
+exit_candles_max: 8
+lookback_h1: 20
+lot_size: 1.0
+magic_number: 123456
+min_displacement_candles: 7
+stop_buffer_points: 5
+symbol: EURUSD
+zone_merge_points: 50
