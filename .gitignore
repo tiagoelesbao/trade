@@ -48,3 +48,5 @@ temp/
 .supabase/
 supabase/.temp/
 supabase/functions/.import_map.json
+
+.vercel

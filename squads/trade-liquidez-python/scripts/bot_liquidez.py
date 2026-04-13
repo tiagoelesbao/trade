@@ -11,6 +11,9 @@ config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config.y
 with open(config_path, "r", encoding="utf-8") as f:
     CFG = yaml.safe_load(f)
 
+from supabase_client import SupabaseManager
+db_manager = SupabaseManager()
+
 # Configurações do Squad (squad.yaml)
 SYMBOL = CFG['symbol']
 TIMEFRAME_H1 = mt5.TIMEFRAME_H1
@@ -175,6 +178,7 @@ def check_m5_trigger(df_m5, zones_h1, point, cooldowns, current_time):
                         'sl': stop_loss, 'tp': take_profit, 'comment': "Liquidez Resistência"
                     }
                     log_ml_features(trigger, zone, last_candle, prev_candle, total_size, top_wick, bottom_wick)
+                    db_manager.log_signal(trigger, wick_pct)
                     return trigger, zone
 
         elif zone['type'] == 'SUPPORT':
@@ -189,6 +193,7 @@ def check_m5_trigger(df_m5, zones_h1, point, cooldowns, current_time):
                         'sl': stop_loss, 'tp': take_profit, 'comment': "Liquidez Suporte"
                     }
                     log_ml_features(trigger, zone, last_candle, prev_candle, total_size, top_wick, bottom_wick)
+                    db_manager.log_signal(trigger, wick_pct)
                     return trigger, zone
                     
     return None, None
@@ -282,11 +287,22 @@ def main():
         while True:
             # Ponto de Cálculo e Offset dinâmico
             point = mt5.symbol_info(SYMBOL).point
+            last_price = mt5.symbol_info_tick(SYMBOL).bid
             now_utc = datetime.now(pytz.utc)
+            
+            # Limpa Terminal e Mostra Dashboard
+            os.system('cls' if os.name == 'nt' else 'clear')
+            print("="*60)
+            print(f" SQUAD LIQUIDEZ: DASHBOARD OPERACIONAL | {now_utc.strftime('%H:%M:%S')} ")
+            print(f" DASHBOARD CLOUD: http://localhost:3000 ")
+            print("="*60)
+            print(f" ATIVO: {SYMBOL} | PRECO: {last_price:.5f} ")
             
             # 1. Validação de Contexto H1
             df_h1 = get_rates(SYMBOL, TIMEFRAME_H1, LOOKBACK_H1)
             zones_h1 = get_validated_h1_zones(df_h1, point)
+            
+            print(f" ZONAS H1 ATIVAS: {len(zones_h1)}")
             
             # 2. Detecção de Gatilho M5
             df_m5 = get_rates(SYMBOL, TIMEFRAME_M5, 10)
@@ -295,16 +311,18 @@ def main():
             if trigger:
                 if not mt5.orders_get(magic=MAGIC_NUMBER) and not mt5.positions_get(magic=MAGIC_NUMBER):
                     send_limit_order(trigger)
-                    # Registra cooldown log
                     z_key = f"{z_triggered['type']}_{round(z_triggered['price'], 5)}"
                     cooldowns[z_key] = now_utc
-            
-            # 3. Exportação para Indicador
+
+            # 3. Cloud Sync & Heartbeat
+            db_manager.log_heartbeat(SYMBOL, "scanning", len(zones_h1))
             export_dynamic_data(zones_h1, trigger)
             
             # 4. Gestões Livres
             manage_active_trades()
             
+            print("="*60)
+            print(" AGUARDANDO PROXIMO SCAN (60s)... ")
             time.sleep(60)
             
     except KeyboardInterrupt:
