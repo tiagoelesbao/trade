@@ -1,0 +1,27 @@
+# CodeRabbit Configuration
+# For more information, visit https://docs.coderabbit.ai/getting-started/configure-coderabbit
+
+# Language-specific instructions
+instructions:
+  - path: "**/*.js"
+    instructions: |
+      Focus on code quality, performance, and best practices.
+      Check for proper error handling and async/await usage.
+  - path: "**/*.py"
+    instructions: |
+      Follow PEP 8 guidelines.
+      Check for type hinting and docstrings.
+  - path: "squads/**"
+    instructions: |
+      This directory contains agentic trading squads. 
+      Ensure tasks and agents are following the AIOX framework standards.
+
+# Review settings
+reviews:
+  profile: balanced
+  request_reviews_auth: true
+  auto_review: true
+
+# Chat settings
+chat:
+  enabled: true
