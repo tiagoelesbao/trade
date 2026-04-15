@@ -45,11 +45,10 @@ export function TickerList() {
           <tr className="text-[#919191] text-sm border-b border-[#1A1A1A]">
             <th className="pb-4 text-left font-medium">Ativo</th>
             <th className="pb-4 text-left font-medium">Tipo</th>
-            <th className="pb-4 text-right font-medium">Preço Entrada</th>
-            <th className="pb-4 text-right font-medium">Stop Loss</th>
-            <th className="pb-4 text-right font-medium">Take Profit</th>
+            <th className="pb-4 text-right font-medium">Preço</th>
+            <th className="pb-4 text-center font-medium">Status</th>
             <th className="pb-4 text-center font-medium">AIA</th>
-            <th className="pb-4 text-right font-medium pr-2">Pavio %</th>
+            <th className="pb-4 text-right font-medium pr-2">Resultado</th>
           </tr>
         </thead>
         <tbody>
@@ -71,24 +70,39 @@ export function TickerList() {
                   </div>
                 </td>
                 <td className="py-4">
-                  <span className={`px-2 py-1 rounded text-xs font-bold ${
+                  <span className={`px-2 py-1 rounded text-[10px] font-bold ${
                     item.type === 'SELL' ? 'bg-red-500/10 text-red-500' : 'bg-emerald-500/10 text-emerald-500'
                   }`}>
-                    {item.type} LIMIT
+                    {item.type}
                   </span>
                 </td>
-                <td className="py-4 text-right text-white font-mono">{item.price?.toFixed(5)}</td>
-                <td className="py-4 text-right text-gray-400 font-mono italic">{item.sl?.toFixed(5)}</td>
-                <td className="py-4 text-right text-emerald-500 font-mono">{item.tp?.toFixed(5)}</td>
+                <td className="py-4 text-right text-white font-mono text-sm">{item.price?.toFixed(5)}</td>
+                <td className="py-4 text-center">
+                   <span className={`text-[10px] uppercase font-bold ${
+                     item.status === 'closed' ? 'text-gray-500' : 
+                     item.status === 'active' ? 'text-emerald-500 animate-pulse' : 
+                     item.status === 'placed' ? 'text-[#0047AB]' : 'text-yellow-500'
+                   }`}>
+                     {item.status || 'pending'}
+                   </span>
+                </td>
                 <td className="py-4 text-center">
                    <div className="flex items-center justify-center gap-1">
-                      <div className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
-                      <span className="text-[10px] text-emerald-500 font-bold">ALTA</span>
+                      <div className={`w-2 h-2 rounded-full shadow-[0_0_8px_rgba(0,0,0,0.3)] ${
+                        item.status === 'rejected' ? 'bg-red-500' : 'bg-emerald-500'
+                      }`}></div>
+                      <span className={`text-[10px] font-bold ${
+                        item.status === 'rejected' ? 'text-red-500' : 'text-emerald-500'
+                      }`}>
+                        {item.status === 'rejected' ? 'VETO' : 'ALTA'}
+                      </span>
                    </div>
                 </td>
                 <td className="py-4 text-right font-medium pr-2">
-                  <div className="flex items-center justify-end gap-1 text-[#0047AB]">
-                    {(item.wick_pct * 100).toFixed(1)}%
+                  <div className={`flex items-center justify-end gap-1 font-mono ${
+                    (item.pnl || 0) > 0 ? 'text-emerald-500' : (item.pnl || 0) < 0 ? 'text-red-500' : 'text-gray-500'
+                  }`}>
+                    {item.pnl ? `${item.pnl > 0 ? '+' : ''}${item.pnl.toFixed(2)} USD` : '---'}
                   </div>
                 </td>
               </tr>

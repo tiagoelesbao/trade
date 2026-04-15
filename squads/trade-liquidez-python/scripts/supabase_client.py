@@ -53,12 +53,31 @@ class SupabaseManager:
                 "tp": order_data['tp'],
                 "magic": 123456,
                 "wick_pct": wick_pct,
-                "status": status
+                "status": status,
+                "pnl": 0.0,
+                "agent_opinions": []
             }
             return self.client.table("signals_liquidez").insert(data).execute()
         except Exception as e:
-            if "PGRST205" in str(e) or "not find the table" in str(e).lower():
-                print("[Supabase ALERT] Tabela 'signals_liquidez' ausente. Rode o SQL Editor no painel Supabase.")
-            else:
-                print(f"[Supabase] Erro ao registrar sinal: {e}")
+            print(f"[Supabase] Erro ao registrar sinal: {e}")
             return None
+
+    def update_signal_status(self, signal_id, status):
+        """Atualiza o status de um sinal (ex: 'placed', 'active', 'closed')."""
+        if not self.client: return
+        try:
+            self.client.table("signals_liquidez").update({"status": status}).eq("id", signal_id).execute()
+        except Exception as e:
+            print(f"[Supabase] Erro ao atualizar status: {e}")
+
+    def update_signal_pnl(self, signal_id, pnl, status="closed"):
+        """Registra o resultado final do sinal (Lucro/Prejuízo)."""
+        if not self.client: return
+        try:
+            self.client.table("signals_liquidez").update({
+                "pnl": pnl,
+                "status": status,
+                "closed_at": "now()"
+            }).eq("id", signal_id).execute()
+        except Exception as e:
+            print(f"[Supabase] Erro ao registrar PNL: {e}")

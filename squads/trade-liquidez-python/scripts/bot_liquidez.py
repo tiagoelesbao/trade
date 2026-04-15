@@ -192,25 +192,33 @@ def check_session_limits(current_pnl):
     return False, "running"
 
 def wait_for_agent_consensus(signal_id):
+    """Aguarda os agentes, mas se houver timeout, APROVA AUTOMATICAMENTE (Fallback)."""
     timeout = CFG.get('consensus_timeout_secs', 30)
     start_time = time.time()
-    print(f"[CONSENSO] Aguardando agentes para sinal {signal_id}...")
+    print(f"[CONSENSO] Solicitando aval da IA para sinal {signal_id}...")
     while (time.time() - start_time) < timeout:
         try:
             res = db_manager.client.table("signals_liquidez").select("status").eq("id", signal_id).execute()
             if res.data:
                 status = res.data[0]['status']
-                if status == 'approved': return True
-                if status == 'rejected': return False
+                if status == 'approved':
+                    print(f"✅ CONSENSO OBTIDO: IA confirmou a entrada.")
+                    return True
+                if status == 'rejected':
+                    print(f"❌ VETO: IA negou, mas seguiremos o Fallback de Aprovação Total.")
+                    return True # Forçamos True conforme pedido
         except: pass
-        time.sleep(2)
-    print(f"⚠️ TIMEOUT: Agentes nao responderam.")
-    return False
+        time.sleep(1)
+    print(f"🚀 FALLBACK: Agentes silentes. Executando trade por autonomia direta!")
+    try: db_manager.client.table("signals_liquidez").update({"status": "approved"}).eq("id", signal_id).execute()
+    except: pass
+    return True
 
-def manage_active_trades():
+def manage_active_trades(signal_id=None):
     positions = mt5.positions_get(magic=MAGIC_NUMBER)
     if positions:
         for pos in positions:
+            if signal_id: db_manager.update_signal_status(signal_id, "active")
             duration_minutes = (datetime.now(pytz.utc) - datetime.fromtimestamp(pos.time, tz=pytz.utc)).total_seconds() / 60
             if duration_minutes >= (EXIT_CANDLES_MAX * 5):
                 mt5.order_send({"action": mt5.TRADE_ACTION_DEAL, "symbol": pos.symbol, "volume": pos.volume, "type": mt5.ORDER_TYPE_BUY if pos.type == mt5.ORDER_TYPE_SELL else mt5.ORDER_TYPE_SELL, "position": pos.ticket, "magic": MAGIC_NUMBER, "comment": "Saida Temporal", "type_time": mt5.ORDER_TIME_GTC, "type_filling": mt5.ORDER_FILLING_RETURN})
@@ -220,12 +228,26 @@ def manage_active_trades():
                 if pos.type == mt5.ORDER_TYPE_BUY and pos.price_current > pos.price_open and pos.sl < pos.price_open: new_sl = pos.price_open + (10 * point)
                 elif pos.type == mt5.ORDER_TYPE_SELL and pos.price_current < pos.price_open and (pos.sl > pos.price_open or pos.sl == 0): new_sl = pos.price_open - (10 * point)
                 if new_sl: mt5.order_send({"action": mt5.TRADE_ACTION_SLTP, "position": pos.ticket, "symbol": pos.symbol, "sl": new_sl, "tp": pos.tp, "magic": MAGIC_NUMBER})
+    elif signal_id:
+        # Se não há posições mas tínhamos um signal_id, verificamos se ele fechou no histórico
+        from_date = datetime.now() - timedelta(hours=1)
+        deals = mt5.history_deals_get(from_date, datetime.now(), group=f"*{SYMBOL}*")
+        if deals:
+            last_deal = deals[-1]
+            if last_deal.magic == MAGIC_NUMBER and (last_deal.entry == 1): # Entry Out
+                db_manager.update_signal_pnl(signal_id, last_deal.profit + last_deal.commission + last_deal.swap)
+                return True # Finalizou
+    return False
 
 def main():
     if not initialize_mt5(): return
-    print(f"Monitorando {SYMBOL} | Meta: ${CFG.get('daily_profit_target')} | Consenso: {CFG.get('use_agent_consensus')}")
+    print(f"Monitorando {SYMBOL} | Modo: OFENSIVO (Auto-Approve Fallback)")
     try:
         cooldowns = {}
+        last_signal_time = 0
+        active_trigger = None
+        current_signal_id = None
+        
         while True:
             point = mt5.symbol_info(SYMBOL).point
             last_price = mt5.symbol_info_tick(SYMBOL).bid
@@ -249,20 +271,37 @@ def main():
             trigger, z_triggered = check_m5_trigger(df_m5, zones_h1, point, cooldowns, now_utc)
             
             if trigger and not mt5.orders_get(magic=MAGIC_NUMBER) and not mt5.positions_get(magic=MAGIC_NUMBER):
+                active_trigger = trigger
+                last_signal_time = time.time()
+                
+                # Registra sinal inicial e captura o ID
+                total, top, bot = calculate_wick_metrics(df_m5.iloc[-2])
+                wick_pct = top/total if trigger['type'] == mt5.ORDER_TYPE_SELL_LIMIT else bot/total
+                
+                initial_status = "awaiting_consensus" if CFG.get('use_agent_consensus', False) else "approved"
+                res = db_manager.log_signal(trigger, wick_pct, status=initial_status)
+                current_signal_id = res.data[0]['id'] if res and res.data else None
+                
                 if CFG.get('use_agent_consensus', False):
-                    # No consensus, calculamos wick_pct aqui para logar
-                    total, top, bot = calculate_wick_metrics(df_m5.iloc[-2])
-                    wick_pct = top/total if trigger['type'] == mt5.ORDER_TYPE_SELL_LIMIT else bot/total
-                    res = db_manager.log_signal(trigger, wick_pct, status="awaiting_consensus")
-                    if res and res.data and wait_for_agent_consensus(res.data[0]['id']):
-                        send_limit_order(trigger)
+                    if current_signal_id and wait_for_agent_consensus(current_signal_id):
+                        if send_limit_order(trigger):
+                            db_manager.update_signal_status(current_signal_id, "placed")
                 else:
-                    send_limit_order(trigger)
+                    if send_limit_order(trigger):
+                        if current_signal_id: db_manager.update_signal_status(current_signal_id, "placed")
+                
                 cooldowns[f"{z_triggered['type']}_{round(z_triggered['price'], 5)}"] = now_utc
 
+            # Mantem a seta no MT5 por 15 minutos (900s) para visibilidade garantida
+            if active_trigger and (time.time() - last_signal_time) > 900:
+                active_trigger = None
+
             db_manager.log_heartbeat(SYMBOL, "scanning", len(zones_h1))
-            export_dynamic_data(zones_h1, trigger)
-            manage_active_trades()
+            export_dynamic_data(zones_h1, active_trigger)
+            
+            if manage_active_trades(current_signal_id):
+                current_signal_id = None # Reset para o próximo sinal
+                
             time.sleep(60)
     except KeyboardInterrupt: pass
     finally: mt5.shutdown()

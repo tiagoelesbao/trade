@@ -20,48 +20,28 @@ export function AgentWarRoom() {
   useEffect(() => {
     const handleNewSignal = (signal: any) => {
       setLatestSignal(signal)
-      setIsAnalyzing(true)
-      
-      // Simulação de análise agêntica (Teamwork)
-      setTimeout(() => {
-        const comments: AgentComment[] = [
-          {
-            agent: "Jim Simons",
-            avatar: "JS",
-            comment: `Anatomia quantitativa validada. Pavio de ${(signal.wick_pct * 100).toFixed(1)}% sugere exaustão de Delta.`,
-            sentiment: signal.type === 'BUY' ? 'bullish' : 'bearish',
-            confidence: 88
-          },
-          {
-            agent: "Druckenmiller",
-            avatar: "SD",
-            comment: "Estrutura Macro em H1 corrobora a liquidez. O ponto de entrada é ótimo para o risco/retorno.",
-            sentiment: signal.type === 'BUY' ? 'bullish' : 'bearish',
-            confidence: 92
-          },
-          {
-            agent: "Nassim Taleb",
-            avatar: "NT",
-            comment: "Risco de cauda controlado pelo SL curto. A convexidade desta entrada é aceitável.",
-            sentiment: 'neutral',
-            confidence: 75
-          }
-        ]
-        setAnalysis(comments)
+      if (signal.agent_opinions && signal.agent_opinions.length > 0) {
+        setAnalysis(signal.agent_opinions)
         setIsAnalyzing(false)
-      }, 2000)
+      } else if (signal.status === 'awaiting_consensus') {
+        setIsAnalyzing(true)
+      }
     }
 
     // Busca o último sinal ao carregar
     const fetchLast = async () => {
-       const { data } = await supabase.from('signals_liquidez').select('*').order('created_at', { ascending: false }).limit(1)
+       const { data } = await supabase
+         .from('signals_liquidez')
+         .select('*')
+         .order('created_at', { ascending: false })
+         .limit(1)
        if (data?.[0]) handleNewSignal(data[0])
     }
     fetchLast()
 
-    // Realtime para novos sinais
+    // Realtime para novos sinais e atualizações de opiniões
     const sub = supabase.channel('war-room')
-      .on('postgres_changes', { event: 'INSERT', table: 'signals_liquidez' }, (p) => {
+      .on('postgres_changes', { event: '*', table: 'signals_liquidez' }, (p) => {
         handleNewSignal(p.new)
       })
       .subscribe()
@@ -95,7 +75,7 @@ export function AgentWarRoom() {
                          item.sentiment === 'bullish' ? 'bg-emerald-500/20 text-emerald-500' : 
                          item.sentiment === 'bearish' ? 'bg-red-500/20 text-red-500' : 'bg-gray-500/20 text-gray-500'
                       }`}>
-                         {item.sentiment.toUpperCase()}
+                         {item.sentiment?.toUpperCase()}
                       </span>
                       <span className="text-[10px] text-gray-500">{item.confidence}% Confiança</span>
                    </div>
@@ -106,12 +86,26 @@ export function AgentWarRoom() {
 
            <div className="mt-4 p-4 rounded-xl bg-[#0047AB]/10 border border-[#0047AB]/30 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                 <CheckCircle2 className="h-5 w-5 text-[#0047AB]" />
-                 <span className="text-sm font-medium text-white">Consenso: VALIDADO</span>
+                 {latestSignal.status === 'approved' || latestSignal.status === 'placed' || latestSignal.status === 'active' || latestSignal.status === 'closed' ? (
+                   <>
+                     <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                     <span className="text-sm font-medium text-white">Consenso: VALIDADO</span>
+                   </>
+                 ) : latestSignal.status === 'rejected' ? (
+                   <>
+                     <AlertTriangle className="h-5 w-5 text-red-500" />
+                     <span className="text-sm font-medium text-white">Consenso: VETADO</span>
+                   </>
+                 ) : (
+                   <>
+                     <Brain className="h-5 w-5 text-[#0047AB] animate-pulse" />
+                     <span className="text-sm font-medium text-white">Consenso: EM ANÁLISE</span>
+                   </>
+                 )}
               </div>
-              <button className="px-4 py-1.5 bg-[#0047AB] hover:bg-[#0056D2] text-white text-xs font-bold rounded-lg transition-colors">
-                 EXECUTAR AGORA
-              </button>
+              <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">
+                 Execução Automática
+              </div>
            </div>
         </div>
       ) : (

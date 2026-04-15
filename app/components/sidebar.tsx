@@ -22,10 +22,10 @@ export function Sidebar() {
           <BarChart3 className="h-6 w-6" />
           <span className="text-sm font-medium tracking-wide">HISTÓRICO</span>
         </Link>
-        <div className="flex items-center gap-4 text-[#919191] hover:text-[#E7E7E7] transition-colors cursor-pointer">
+        <Link href="/gatilhos" className={`flex items-center gap-4 transition-colors cursor-pointer ${pathname === '/gatilhos' ? 'text-[#E7E7E7]' : 'text-[#919191] hover:text-[#E7E7E7]'}`}>
           <Rabbit className="h-6 w-6" />
           <span className="text-sm font-medium tracking-wide">GATILHOS</span>
-        </div>
+        </Link>
         <div className="flex items-center gap-4 text-[#919191] hover:text-[#E7E7E7] transition-colors cursor-pointer">
           <Banknote className="h-6 w-6" />
           <span className="text-sm font-medium tracking-wide">PERFORMANCE</span>

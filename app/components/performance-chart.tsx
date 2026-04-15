@@ -1,7 +1,9 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { Calendar, Download } from 'lucide-react'
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts"
+import { supabase } from "@/lib/supabase"
 
 const data = [
   { date: "Jan 1", price: 355 }, { date: "Jan 8", price: 358 }, { date: "Jan 15", price: 345 },
@@ -34,27 +36,59 @@ const data = [
 ]
 
 export function PerformanceChart() {
+  const [chartData, setChartData] = useState<{date: string, pnl: number}[]>([])
+  const [totalProfit, setTotalProfit] = useState(0)
+
+  useEffect(() => {
+    const fetchPerformance = async () => {
+      const { data } = await supabase
+        .from('signals_liquidez')
+        .select('pnl, closed_at')
+        .eq('status', 'closed')
+        .order('closed_at', { ascending: true })
+      
+      if (data) {
+        let cumulativePnl = 0
+        const formatted = data.map((item: any) => {
+          cumulativePnl += item.pnl || 0
+          return {
+            date: new Date(item.closed_at).toLocaleDateString(),
+            pnl: cumulativePnl
+          }
+        })
+        setChartData(formatted)
+        setTotalProfit(cumulativePnl)
+      }
+    }
+    fetchPerformance()
+
+    const sub = supabase.channel('perf-update')
+      .on('postgres_changes', { event: 'UPDATE', table: 'signals_liquidez' }, () => {
+        fetchPerformance()
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(sub) }
+  }, [])
+
   return (
     <div className="flex flex-col gap-6 p-6 bg-[#0D0D0D] rounded-2xl">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 md:gap-2 lg:gap-4 flex-wrap">
         <div className="flex items-center gap-3">
           <h2 className="text-xl font-medium text-white">Performance do Algoritmo</h2>
           <div className="flex items-center gap-2 px-3 py-1 bg-[#1A1A1A] rounded-full border border-[#333]">
-            <div className="w-4 h-4 rounded-full bg-[#0047AB] flex items-center justify-center">
-              <span className="text-[10px] font-bold text-white">E</span>
-            </div>
-            <span className="text-sm font-medium text-white">EURUSD</span>
+            <span className="text-sm font-medium text-emerald-500">{totalProfit >= 0 ? '+' : ''}{totalProfit.toFixed(2)} USD</span>
           </div>
         </div>
       </div>
 
       <div className="h-[400px] w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data}>
+          <AreaChart data={chartData.length > 0 ? chartData : [{date: 'Aguardando', pnl: 0}]}>
             <defs>
               <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="var(--primary)" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="var(--primary)" stopOpacity={0}/>
+                <stop offset="5%" stopColor="#0047AB" stopOpacity={0.3}/>
+                <stop offset="95%" stopColor="#0047AB" stopOpacity={0}/>
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="#1F1F1F" vertical={false} />
@@ -63,12 +97,9 @@ export function PerformanceChart() {
               hide 
             />
             <YAxis 
-              domain={[250, 500]} 
-              orientation="left" 
               tick={{ fill: '#666' }} 
               axisLine={false}
               tickLine={false}
-              ticks={[250, 300, 350, 400, 450, 500]}
             />
             <Tooltip 
               content={({ active, payload }) => {
@@ -87,8 +118,8 @@ export function PerformanceChart() {
             
             <Area 
               type="monotone" 
-              dataKey="price" 
-              stroke="var(--primary)" 
+              dataKey="pnl" 
+              stroke="#0047AB" 
               strokeWidth={2} 
               fillOpacity={1} 
               fill="url(#colorPrice)" 

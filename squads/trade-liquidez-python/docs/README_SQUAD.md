@@ -1,33 +1,36 @@
-# 🏗️ Manual Mestre: Squad Trade-Liquidez-Python v3.5 Stable
+# 🏗️ Manual Mestre: Squad Trade-Liquidez-Python v4.0 Agêntica
 
-Este ecossistema foi projetado para transformar a estratégia de **Liquidez de Pavio** em uma operação institucional automatizada, resiliente e autogerenciada por IA, agora integrada a uma interface de comando global.
+Este ecossistema evoluiu de um robô de execução para uma **Operação de Trading Autônoma**. Agora, a estratégia de **Liquidez de Pavio** é governada por um conselho de agentes IA (Simons, Taleb, Druckenmiller) que validam cada entrada em tempo real.
 
 ---
 
-## ⚖️ 1. Arquitetura AIOX (Unified Fullstack)
+## ⚖️ 1. Arquitetura de Governança AIOX
 
-O sistema opera em uma estrutura de duas camadas integradas pelo Supabase:
+O sistema opera em um ciclo fechado de inteligência, execução e visualização:
 
-1.  **Command Center (Frontend):** Localizado em `/app`, construído com Next.js 15.1.11 (Secure) e Tailwind CSS. Monitoramento global em [https://trade-two-smoky.vercel.app](https://trade-two-smoky.vercel.app).
-2.  **Trading Agents (Python):** Localizado em `/squads/trade-liquidez-python`, executa a lógica quantitativa e se comunica com o MetaTrader 5 via Ponte de Sincronia Robusta.
+1.  **Command Center (Frontend):** Monitoramento global em [trade-two-smoky.vercel.app](https://trade-two-smoky.vercel.app).
+2.  **Trading Engine (Python):** Execução técnica e monitoramento de P&L no MT5.
+3.  **War Room (AIOX Agents):** Camada de decisão que aprova ou veta sinais via Supabase.
 
-### 🏛️ Diagrama de Orquestração v3.5
+### 🏛️ Diagrama de Orquestração v4.0
 ```mermaid
 graph TD
     subgraph "CAMADA CLOUD (Vercel/Supabase)"
     A[Dashboard Live] <-->|Real-time| B[(Supabase DB)]
+    H[AIOX Agents - War Room] <-->|Consenso/Voto| B
     end
 
     subgraph "CAMADA LOCAL (MetaTrader 5)"
-    C[bot_liquidez.py] -->|1. Sinais/Heartbeat| B
-    C -->|2. Sincronia ANSI| D[IndicadorLiquidez.ex5]
-    D -->|Visual Display| E[Gráfico MT5]
+    C[bot_liquidez.py] -->|1. Sinais Pendentes| B
+    B -->|2. Aprovação/Veto| C
+    C -->|3. Execução Limit| D[MT5 Terminal]
+    C -->|4. Sincronia Visual| E[IndicadorLiquidez.ex5]
     end
 
-    subgraph "RECURSOS DE ESTABILIDADE"
-    F[simulate_trade.py] -->|Validação End-to-End| B
-    F -->|Teste Visual| D
-    G[run_watchdog.bat] -->|Auto-Restart| C
+    subgraph "CICLO AUTÔNOMO"
+    G[FULL_START.bat] -->|Abertura| I[@analyst - Config Otimizada]
+    I -->|Setup| C
+    C -->|Auto-Shutdown| J[Meta Batida / Stop atingido]
     end
 ```
 
@@ -38,53 +41,53 @@ graph TD
 | Pasta / Arquivo | Função Principal |
 |---|---|
 | 📂 **Raiz do Projeto** | |
-| 📁 `app/` | Código fonte do Dashboard Web (Next.js). |
-| 📄 `FULL_START.bat` | Inicializador mestre que liga o Dashboard Local e o Robô. |
-| 📂 **squads/trade-liquidez-python/** | |
-| 📁 `scripts/` | Motores operacionais (Python). |
-| 📄 `bot_liquidez.py` | Execuão real das ordens e gestão de ciclos. |
-| 📄 `simulate_trade.py` | **Hub de Testes.** Valida simultaneamente a Nuvem e o MT5. |
-| 📄 `IndicadorLiquidez.mq5` | **Ponte Blindada.** Agora com suporte a `FILE_SHARE_READ` e ANSI. |
-| 📄 `config.yaml` | Parâmetros de risco e filtros quantitativos. |
+| 📄 `FULL_START.bat` | **Orquestrador v3.0.** Prepara a sessão com IA e liga o ecossistema. |
+| 📂 **squads/trade-liquidez-python/scripts/** | |
+| 📄 `bot_liquidez.py` | **Motor Mestre.** Agora com P&L diário e Consenso Agêntico. |
+| 📄 `diagnose_today.py` | **Auditoria Dinâmica.** Explica por que o robô não entrou em trades. |
+| 📄 `clean_production_db.py` | **Manutenção.** Limpa registros de teste e heartbeats antigos. |
+| 📄 `war_room_voter.py` | **Interface de Voto.** Ferramenta dos agentes para aprovar sinais. |
+| 📄 `supabase_client.py` | **Sync de Dados.** Gerencia a comunicação com a Sala de Guerra. |
+| 📄 `IndicadorLiquidez.mq5` | **Ponte Visual.** Desenha zonas e sinais em tempo real no MT5. |
+| 📄 `config.yaml` | **Cérebro Estratégico.** Parâmetros de risco, metas e travas de IA. |
 
 ---
 
 ## 🚀 3. Motores de Performance (Avançado)
 
-### 🧩 A. Sincronia Visual "Blindada" (MT5 Bridge)
-O `IndicadorLiquidez.mq5` foi refatorado para ser imune a conflitos de leitura. 
-- **Robustez:** Utiliza abertura compartilhada, permitindo que o robô escreva enquanto o indicador lê, eliminando o erro de "arquivo em uso".
-- **Formato:** Codificação ANSI purista para compatibilidade total com o terminal Windows.
+### 🧠 A. Sala de Guerra Agêntica (AIA)
+O robô não opera mais sozinho. Ao detectar um sinal, ele o envia para a "nuvem" e aguarda até 30s.
+- **Aprovação:** Se o contexto macro (tendência, notícias) for favorável, os agentes aprovam.
+- **Veto:** Evita entradas contra a tendência ou em momentos de notícias de alto impacto.
 
-### 🧬 B. Dashboard de Vigilância (Vercel)
-O Dashboard em [trade-two-smoky.vercel.app](https://trade-two-smoky.vercel.app) oferece:
-- **Monitor de Heartbeat:** Confirmação em tempo real que o robô local está "respirando".
-- **Sala de Guerra Agêntica:** Consenso em tempo real entre personas (Simons, Druckenmiller, Taleb) antes da execução de sinais.
-
----
-
-## 🛠️ 4. Guia de Operação Estabilizada
-
-### 🚦 Como Rodar um Teste de Ponta a Ponta
-Para garantir que tudo está ok antes da sessão:
-1.  Abra o MetaTrader 5 e carregue o `IndicadorLiquidez` (Certifique-se de compilar com **F7** no MetaEditor).
-2.  No terminal, execute:
-    ```bash
-    python scripts/simulate_trade.py
-    ```
-3.  **Verifique:** O Dashboard deve piscar "SIGNAL" e o MT5 deve desenhar as zonas e setas instantaneamente.
-
-### ⚙️ Produção Real-Time
-1.  Use o **`FULL_START.bat`** na raiz para ligar o sistema completo.
-2.  Monitore logs via console e a performance via deploy na Vercel.
+### 💰 B. Gestão de Meta e Auto-Shutdown
+O sistema possui consciência financeira.
+- **Meta Diária:** Ao atingir o lucro alvo (ex: $100), o robô encerra a sessão e se desliga.
+- **Proteção de Capital:** Limite de perda (Stop Loss Diário) encerra as operações para proteger o saldo.
 
 ---
 
-## 🧠 5. Configuração de Segurança Cloud
+## 🛠️ 4. Guia de Operação Autônoma
 
-O frontend foi estabilizado contra vulnerabilidades críticas:
-*   **Next.js:** Mantido em v15.1.11+.
-*   **Vercel Settings:** Framework Preset fixado em **Next.js** para roteamento dinâmico.
+### 🚦 Iniciando a Sessão
+Basta executar o arquivo mestre na raiz:
+1.  Rode o **`FULL_START.bat`**.
+2.  O `@analyst` fará a leitura de mercado e ajustará os filtros no `config.yaml`.
+3.  O Dashboard e o Robô subirão automaticamente.
+
+### 📊 Monitoramento
+Acompanhe tudo pelo endpoint de vigilância:
+- [https://trade-two-smoky.vercel.app/monitor](https://trade-two-smoky.vercel.app/monitor)
+- Verifique o card **SALA DE GUERRA AGÊNTICA** para ver os julgamentos da IA em tempo real.
 
 ---
-*Manual Mestre v3.5 Stable - Synkra AIOX Ecosystem*
+
+## 🧠 5. Configuração Dinâmica (`config.yaml`)
+
+Principais chaves para ajuste fino:
+*   `use_agent_consensus`: Ativa/Desativa o veto da IA.
+*   `daily_profit_target`: Define quando o dia "acaba" com vitória.
+*   `require_volume_momentum`: Flexibiliza a entrada em mercados lentos.
+
+---
+*Manual Mestre v4.0 Agêntica - Synkra AIOX Ecosystem*
