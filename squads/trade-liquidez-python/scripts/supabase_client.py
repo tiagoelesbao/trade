@@ -45,9 +45,17 @@ class SupabaseManager:
         """Registra um novo sinal de liquidez."""
         if not self.client: return None
         try:
+            # Identifica o tipo baseado no comentário ou no tipo da ordem MT5
+            comment = order_data.get('comment', '').upper()
+            order_type = order_data.get('type', 0)
+            
+            # Se for ordem tipo 1, 3, 5 (SELL) ou comentário tiver 'RESISTENCIA' ou 'SELL'
+            is_sell = "SELL" in comment or "RESISTENCIA" in comment or order_type in [1, 3, 5]
+            sig_type = "SELL" if is_sell else "BUY"
+
             data = {
                 "symbol": order_data.get('symbol', 'EURUSD'),
-                "type": "SELL" if "SELL" in order_data.get('comment', '') else "BUY",
+                "type": sig_type,
                 "price": order_data['price'],
                 "sl": order_data['sl'],
                 "tp": order_data['tp'],

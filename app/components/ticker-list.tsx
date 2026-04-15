@@ -94,7 +94,7 @@ export function TickerList() {
                       <span className={`text-[10px] font-bold ${
                         item.status === 'rejected' ? 'text-red-500' : 'text-emerald-500'
                       }`}>
-                        {item.status === 'rejected' ? 'VETO' : 'ALTA'}
+                        {item.status === 'rejected' ? 'VETO' : 'VALIDADO'}
                       </span>
                    </div>
                 </td>

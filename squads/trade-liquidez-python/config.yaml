@@ -19,5 +19,6 @@ daily_profit_target: 100.0     # Meta de lucro em USD para parar o robô
 daily_max_loss: 50.0          # Limite de perda em USD para parar o robô
 # --- FILTRO DE CONSENSO AGÊNTICO ---
 use_agent_consensus: true     # Se true, espera aprovação da IA no Supabase antes de operar
+execution_mode: "market"      # Opções: "market" (executa na hora) ou "limit" (aguarda melhor preço)
 consensus_timeout_secs: 30    # Tempo máximo de espera pela resposta dos agentes
 consensus_min_votes: 1        # Mínimo de agentes que precisam aprovar (futuro)

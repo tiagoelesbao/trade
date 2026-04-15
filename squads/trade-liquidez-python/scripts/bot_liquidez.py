@@ -158,15 +158,40 @@ def check_m5_trigger(df_m5, zones_h1, point, cooldowns, current_time):
                 return trigger, zone
     return None, None
 
-def send_limit_order(order_data):
+def send_order(order_data):
+    mode = CFG.get('execution_mode', 'limit').lower()
+    
+    if mode == 'market':
+        # Para mercado, precisamos do preço atual do Tick
+        tick = mt5.symbol_info_tick(SYMBOL)
+        price = tick.bid if order_data['type'] == mt5.ORDER_TYPE_SELL_LIMIT else tick.ask
+        order_type = mt5.ORDER_TYPE_SELL if order_data['type'] == mt5.ORDER_TYPE_SELL_LIMIT else mt5.ORDER_TYPE_BUY
+        action = mt5.TRADE_ACTION_DEAL
+    else:
+        # Modo Limit Original
+        price = order_data['price']
+        order_type = order_data['type']
+        action = mt5.TRADE_ACTION_PENDING
+
     request = {
-        "action": mt5.TRADE_ACTION_PENDING, "symbol": SYMBOL, "volume": CFG.get('lot_size', 1.0),
-        "type": order_data['type'], "price": order_data['price'], "sl": order_data['sl'], "tp": order_data['tp'],
-        "magic": MAGIC_NUMBER, "comment": order_data['comment'], "type_time": mt5.ORDER_TIME_GTC, "type_filling": mt5.ORDER_FILLING_RETURN,
+        "action": action, 
+        "symbol": SYMBOL, 
+        "volume": CFG.get('lot_size', 1.0),
+        "type": order_type, 
+        "price": price, 
+        "sl": order_data['sl'], 
+        "tp": order_data['tp'],
+        "magic": MAGIC_NUMBER, 
+        "comment": order_data['comment'], 
+        "type_time": mt5.ORDER_TIME_GTC, 
+        "type_filling": mt5.ORDER_FILLING_RETURN,
     }
+    
     result = mt5.order_send(request)
-    if result.retcode != mt5.TRADE_RETCODE_DONE: print(f"Erro ao enviar ordem: {result.comment} ({result.retcode})")
-    else: print(f"Ordem {order_data['comment']} enviada: {order_data['price']}")
+    if result.retcode != mt5.TRADE_RETCODE_DONE: 
+        print(f"Erro ao enviar ordem ({mode}): {result.comment} ({result.retcode})")
+    else: 
+        print(f"Ordem {mode.upper()} enviada com sucesso em {price}")
     return result
 
 def get_daily_pnl():
@@ -229,19 +254,24 @@ def manage_active_trades(signal_id=None):
                 elif pos.type == mt5.ORDER_TYPE_SELL and pos.price_current < pos.price_open and (pos.sl > pos.price_open or pos.sl == 0): new_sl = pos.price_open - (10 * point)
                 if new_sl: mt5.order_send({"action": mt5.TRADE_ACTION_SLTP, "position": pos.ticket, "symbol": pos.symbol, "sl": new_sl, "tp": pos.tp, "magic": MAGIC_NUMBER})
     elif signal_id:
-        # Se não há posições mas tínhamos um signal_id, verificamos se ele fechou no histórico
-        from_date = datetime.now() - timedelta(hours=1)
-        deals = mt5.history_deals_get(from_date, datetime.now(), group=f"*{SYMBOL}*")
+        # Se não há posições ativas, mas temos um signal_id, verificamos o histórico de hoje
+        from_date = datetime.now() - timedelta(days=1)
+        deals = mt5.history_deals_get(from_date, datetime.now() + timedelta(hours=1))
         if deals:
-            last_deal = deals[-1]
-            if last_deal.magic == MAGIC_NUMBER and (last_deal.entry == 1): # Entry Out
-                db_manager.update_signal_pnl(signal_id, last_deal.profit + last_deal.commission + last_deal.swap)
-                return True # Finalizou
+            # Filtra apenas deals que fecharam posições (entry out) deste robô
+            relevant_deals = [d for d in deals if d.magic == MAGIC_NUMBER and d.entry == 1]
+            if relevant_deals:
+                last_deal = relevant_deals[-1]
+                pnl_final = last_deal.profit + last_deal.commission + last_deal.swap
+                print(f"💰 Operação Finalizada! PNL: ${pnl_final:.2f} | Atualizando sinal {signal_id}")
+                db_manager.update_signal_pnl(signal_id, pnl_final)
+                return True # Finalizou com sucesso
     return False
 
 def main():
     if not initialize_mt5(): return
-    print(f"Monitorando {SYMBOL} | Modo: OFENSIVO (Auto-Approve Fallback)")
+    mode = CFG.get('execution_mode', 'limit').upper()
+    print(f"Monitorando {SYMBOL} | Modo: OFENSIVO | Execução: {mode}")
     try:
         cooldowns = {}
         last_signal_time = 0
@@ -250,7 +280,6 @@ def main():
         
         while True:
             point = mt5.symbol_info(SYMBOL).point
-            last_price = mt5.symbol_info_tick(SYMBOL).bid
             now_utc = datetime.now(pytz.utc)
             
             pnl = get_daily_pnl()
@@ -259,6 +288,7 @@ def main():
             os.system('cls' if os.name == 'nt' else 'clear')
             print("="*60)
             print(f" SQUAD LIQUIDEZ | {now_utc.strftime('%H:%M:%S')} | P&L DIA: ${pnl:.2f} | STATUS: {status_str.upper()}")
+            print(f" MODO DE EXECUÇÃO: {mode}")
             print("="*60)
             
             if stop_needed and CFG.get('stop_after_target', True):
@@ -284,11 +314,11 @@ def main():
                 
                 if CFG.get('use_agent_consensus', False):
                     if current_signal_id and wait_for_agent_consensus(current_signal_id):
-                        if send_limit_order(trigger):
-                            db_manager.update_signal_status(current_signal_id, "placed")
+                        if send_order(trigger):
+                            db_manager.update_signal_status(current_signal_id, "placed" if mode == 'LIMIT' else "active")
                 else:
-                    if send_limit_order(trigger):
-                        if current_signal_id: db_manager.update_signal_status(current_signal_id, "placed")
+                    if send_order(trigger):
+                        if current_signal_id: db_manager.update_signal_status(current_signal_id, "placed" if mode == 'LIMIT' else "active")
                 
                 cooldowns[f"{z_triggered['type']}_{round(z_triggered['price'], 5)}"] = now_utc
 

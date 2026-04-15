@@ -31,7 +31,7 @@ def check_tables():
         print("!"*40 + "\n")
         
         sql = """
--- 1. Tabela de Sinais
+-- 1. Tabela de Sinais (ou Atualização)
 CREATE TABLE IF NOT EXISTS signals_liquidez (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
@@ -42,8 +42,16 @@ CREATE TABLE IF NOT EXISTS signals_liquidez (
     tp DECIMAL,
     magic INT8,
     wick_pct DECIMAL,
-    status TEXT DEFAULT 'pending'
+    status TEXT DEFAULT 'pending',
+    pnl DECIMAL DEFAULT 0.0,
+    agent_opinions JSONB DEFAULT '[]'::jsonb,
+    closed_at TIMESTAMP WITH TIME ZONE
 );
+
+-- Script de Migração (Caso a tabela já exista)
+-- ALTER TABLE signals_liquidez ADD COLUMN IF NOT EXISTS pnl DECIMAL DEFAULT 0.0;
+-- ALTER TABLE signals_liquidez ADD COLUMN IF NOT EXISTS agent_opinions JSONB DEFAULT '[]'::jsonb;
+-- ALTER TABLE signals_liquidez ADD COLUMN IF NOT EXISTS closed_at TIMESTAMP WITH TIME ZONE;
 
 -- 2. Tabela de Heartbeats
 CREATE TABLE IF NOT EXISTS bot_heartbeats (
