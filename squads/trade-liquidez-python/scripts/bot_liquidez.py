@@ -280,6 +280,10 @@ def manage_active_trades(signal_id=None):
 def main():
     if not initialize_mt5(): return
     mode = CFG.get('execution_mode', 'limit').upper()
+    
+    # Captura o lucro acumulado no momento do start para calcular o P&L da sessão
+    initial_pnl = get_daily_pnl()
+    
     print(f"Monitorando {SYMBOL} | Modo: OFENSIVO | Execução: {mode}")
     try:
         cooldowns = {}
@@ -291,12 +295,15 @@ def main():
             point = mt5.symbol_info(SYMBOL).point
             now_utc = datetime.now(pytz.utc)
             
-            pnl = get_daily_pnl()
-            stop_needed, status_str = check_session_limits(pnl)
+            # P&L da Sessão = Lucro Atual - Lucro no Momento do Start
+            total_daily_pnl = get_daily_pnl()
+            session_pnl = total_daily_pnl - initial_pnl
+            
+            stop_needed, status_str = check_session_limits(session_pnl)
             
             os.system('cls' if os.name == 'nt' else 'clear')
             print("="*60)
-            print(f" SQUAD LIQUIDEZ | {now_utc.strftime('%H:%M:%S')} | P&L DIA: ${pnl:.2f} | STATUS: {status_str.upper()}")
+            print(f" SQUAD LIQUIDEZ | {now_utc.strftime('%H:%M:%S')} | P&L SESSÃO: ${session_pnl:.2f} | STATUS: {status_str.upper()}")
             print(f" MODO DE EXECUÇÃO: {mode}")
             print("="*60)
             
