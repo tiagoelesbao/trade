@@ -162,36 +162,43 @@ def send_order(order_data):
     mode = CFG.get('execution_mode', 'limit').lower()
     
     if mode == 'market':
-        # Para mercado, precisamos do preço atual do Tick
         tick = mt5.symbol_info_tick(SYMBOL)
         price = tick.bid if order_data['type'] == mt5.ORDER_TYPE_SELL_LIMIT else tick.ask
         order_type = mt5.ORDER_TYPE_SELL if order_data['type'] == mt5.ORDER_TYPE_SELL_LIMIT else mt5.ORDER_TYPE_BUY
         action = mt5.TRADE_ACTION_DEAL
     else:
-        # Modo Limit Original
         price = order_data['price']
         order_type = order_data['type']
         action = mt5.TRADE_ACTION_PENDING
 
-    request = {
-        "action": action, 
-        "symbol": SYMBOL, 
-        "volume": CFG.get('lot_size', 1.0),
-        "type": order_type, 
-        "price": price, 
-        "sl": order_data['sl'], 
-        "tp": order_data['tp'],
-        "magic": MAGIC_NUMBER, 
-        "comment": order_data['comment'], 
-        "type_time": mt5.ORDER_TIME_GTC, 
-        "type_filling": mt5.ORDER_FILLING_RETURN,
-    }
+    # Lista de modos de preenchimento para tentar (FOK é o mais comum em contas Hedge/Demo)
+    filling_modes = [mt5.ORDER_FILLING_FOK, mt5.ORDER_FILLING_IOC, mt5.ORDER_FILLING_RETURN]
     
-    result = mt5.order_send(request)
-    if result.retcode != mt5.TRADE_RETCODE_DONE: 
-        print(f"Erro ao enviar ordem ({mode}): {result.comment} ({result.retcode})")
-    else: 
-        print(f"Ordem {mode.upper()} enviada com sucesso em {price}")
+    for f_mode in filling_modes:
+        request = {
+            "action": action, 
+            "symbol": SYMBOL, 
+            "volume": CFG.get('lot_size', 1.0),
+            "type": order_type, 
+            "price": price, 
+            "sl": order_data['sl'], 
+            "tp": order_data['tp'],
+            "magic": MAGIC_NUMBER, 
+            "comment": order_data['comment'], 
+            "type_time": mt5.ORDER_TIME_GTC, 
+            "type_filling": f_mode,
+        }
+        
+        result = mt5.order_send(request)
+        if result.retcode == mt5.TRADE_RETCODE_DONE:
+            print(f"Ordem {mode.upper()} enviada com sucesso (Mode: {f_mode})")
+            return result
+        elif result.retcode == 10030: # Unsupported filling mode
+            continue # Tenta o próximo modo
+        else:
+            print(f"Erro ao enviar ordem: {result.comment} ({result.retcode})")
+            return result
+            
     return result
 
 def get_daily_pnl():
@@ -254,18 +261,20 @@ def manage_active_trades(signal_id=None):
                 elif pos.type == mt5.ORDER_TYPE_SELL and pos.price_current < pos.price_open and (pos.sl > pos.price_open or pos.sl == 0): new_sl = pos.price_open - (10 * point)
                 if new_sl: mt5.order_send({"action": mt5.TRADE_ACTION_SLTP, "position": pos.ticket, "symbol": pos.symbol, "sl": new_sl, "tp": pos.tp, "magic": MAGIC_NUMBER})
     elif signal_id:
-        # Se não há posições ativas, mas temos um signal_id, verificamos o histórico de hoje
-        from_date = datetime.now() - timedelta(days=1)
-        deals = mt5.history_deals_get(from_date, datetime.now() + timedelta(hours=1))
+        # Se não há posições ativas, mas temos um signal_id, verificamos o histórico de forma ampla
+        # Usamos uma janela de tempo agressiva para cobrir fuso horários diferentes (Broker vs Local)
+        from_date = datetime.now() - timedelta(days=2)
+        to_date = datetime.now() + timedelta(days=2)
+        deals = mt5.history_deals_get(from_date, to_date)
         if deals:
             # Filtra apenas deals que fecharam posições (entry out) deste robô
             relevant_deals = [d for d in deals if d.magic == MAGIC_NUMBER and d.entry == 1]
             if relevant_deals:
                 last_deal = relevant_deals[-1]
                 pnl_final = last_deal.profit + last_deal.commission + last_deal.swap
-                print(f"💰 Operação Finalizada! PNL: ${pnl_final:.2f} | Atualizando sinal {signal_id}")
+                print(f"💰 Operação Detectada no Histórico! PNL: ${pnl_final:.2f} | Sinal: {signal_id}")
                 db_manager.update_signal_pnl(signal_id, pnl_final)
-                return True # Finalizou com sucesso
+                return True 
     return False
 
 def main():
@@ -314,11 +323,19 @@ def main():
                 
                 if CFG.get('use_agent_consensus', False):
                     if current_signal_id and wait_for_agent_consensus(current_signal_id):
-                        if send_order(trigger):
+                        result = send_order(trigger)
+                        if result.retcode == mt5.TRADE_RETCODE_DONE:
                             db_manager.update_signal_status(current_signal_id, "placed" if mode == 'LIMIT' else "active")
+                        else:
+                            db_manager.update_signal_status(current_signal_id, "failed")
+                            print(f"⚠️ Ordem recusada pelo MT5: {result.comment}")
                 else:
-                    if send_order(trigger):
+                    result = send_order(trigger)
+                    if result.retcode == mt5.TRADE_RETCODE_DONE:
                         if current_signal_id: db_manager.update_signal_status(current_signal_id, "placed" if mode == 'LIMIT' else "active")
+                    else:
+                        if current_signal_id: db_manager.update_signal_status(current_signal_id, "failed")
+                        print(f"⚠️ Ordem recusada pelo MT5: {result.comment}")
                 
                 cooldowns[f"{z_triggered['type']}_{round(z_triggered['price'], 5)}"] = now_utc
 

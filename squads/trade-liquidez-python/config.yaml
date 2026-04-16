@@ -12,7 +12,7 @@ zone_merge_points: 50
 
 # --- NOVOS FILTROS DE FLEXIBILIDADE ---
 require_volume_momentum: false  # Se true, exige volume > anterior
-require_color_reversal: true   # Se true, exige fechamento de cor oposta à anterior
+require_color_reversal: true    # Se true, exige fechamento de cor oposta à anterior
 min_wick_pct: 0.30             # Percentual mínimo de pavio
 # --- GESTÃO DE META DIÁRIA ---
 daily_profit_target: 100.0     # Meta de lucro em USD para parar o robô

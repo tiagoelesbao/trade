@@ -1,34 +1,35 @@
-# 🏗️ Manual Mestre: Squad Trade-Liquidez-Python v4.0 Agêntica
+# 🏗️ Manual Mestre: Squad Trade-Liquidez-Python v4.1 Agêntica
 
-Este ecossistema evoluiu de um robô de execução para uma **Operação de Trading Autônoma**. Agora, a estratégia de **Liquidez de Pavio** é governada por um conselho de agentes IA (Simons, Taleb, Druckenmiller) que validam cada entrada em tempo real.
+Este ecossistema evoluiu para uma **Operação de Trading de Alta Fidelidade**. A estratégia de **Liquidez de Pavio** agora é totalmente autônoma, com execução imediata (Market) ou inteligente (Limit), governada por um conselho de agentes IA que reportam resultados reais e opiniões estruturadas ao Dashboard.
 
 ---
 
 ## ⚖️ 1. Arquitetura de Governança AIOX
 
-O sistema opera em um ciclo fechado de inteligência, execução e visualização:
+O sistema opera em um ciclo fechado de inteligência, execução e visualização em tempo real:
 
 1.  **Command Center (Frontend):** Monitoramento global em [trade-two-smoky.vercel.app](https://trade-two-smoky.vercel.app).
-2.  **Trading Engine (Python):** Execução técnica e monitoramento de P&L no MT5.
-3.  **War Room (AIOX Agents):** Camada de decisão que aprova ou veta sinais via Supabase.
+2.  **Trading Engine (Python):** Execução técnica (MARKET/LIMIT) e reporte de P&L real ao fechar ordens no MT5.
+3.  **War Room (AIOX Agents):** Camada de decisão que gera opiniões (Simons, Taleb, Druckenmiller) e valida sinais via Supabase.
 
-### 🏛️ Diagrama de Orquestração v4.0
+### 🏛️ Diagrama de Orquestração v4.1
 ```mermaid
 graph TD
     subgraph "CAMADA CLOUD (Vercel/Supabase)"
-    A[Dashboard Live] <-->|Real-time| B[(Supabase DB)]
-    H[AIOX Agents - War Room] <-->|Consenso/Voto| B
+    A[Dashboard v4.1] <-->|Real-time| B[(Supabase DB)]
+    H[auto_war_room.py] <-->|Opiniões Reais| B
     end
 
     subgraph "CAMADA LOCAL (MetaTrader 5)"
-    C[bot_liquidez.py] -->|1. Sinais Pendentes| B
-    B -->|2. Aprovação/Veto| C
-    C -->|3. Execução Limit| D[MT5 Terminal]
+    C[bot_liquidez.py] -->|1. Sinal / PNL Real| B
+    B -->|2. Consenso/Voto| C
+    C -->|3. Execução MARKET/LIMIT| D[MT5 Terminal]
     C -->|4. Sincronia Visual| E[IndicadorLiquidez.ex5]
     end
 
     subgraph "CICLO AUTÔNOMO"
-    G[FULL_START.bat] -->|Abertura| I[@analyst - Config Otimizada]
+    G[FULL_START.bat] -->|Fase 0: Limpeza| K[clean_db.py]
+    G -->|Fase 1: Setup| I[@analyst - Config Otimizada]
     I -->|Setup| C
     C -->|Auto-Shutdown| J[Meta Batida / Stop atingido]
     end
@@ -41,53 +42,55 @@ graph TD
 | Pasta / Arquivo | Função Principal |
 |---|---|
 | 📂 **Raiz do Projeto** | |
-| 📄 `FULL_START.bat` | **Orquestrador v3.0.** Prepara a sessão com IA e liga o ecossistema. |
+| 📄 `FULL_START.bat` | **Orquestrador v4.1.** Orquestra limpeza, diagnóstico e boot de todos os módulos. |
 | 📂 **squads/trade-liquidez-python/scripts/** | |
-| 📄 `bot_liquidez.py` | **Motor Mestre.** Agora com P&L diário e Consenso Agêntico. |
-| 📄 `diagnose_today.py` | **Auditoria Dinâmica.** Explica por que o robô não entrou em trades. |
-| 📄 `clean_production_db.py` | **Manutenção.** Limpa registros de teste e heartbeats antigos. |
-| 📄 `war_room_voter.py` | **Interface de Voto.** Ferramenta dos agentes para aprovar sinais. |
-| 📄 `supabase_client.py` | **Sync de Dados.** Gerencia a comunicação com a Sala de Guerra. |
-| 📄 `IndicadorLiquidez.mq5` | **Ponte Visual.** Desenha zonas e sinais em tempo real no MT5. |
-| 📄 `config.yaml` | **Cérebro Estratégico.** Parâmetros de risco, metas e travas de IA. |
+| 📄 `bot_liquidez.py` | **Motor Mestre.** Execução dual (Market/Limit) e reporte de PNL real. |
+| 📄 `auto_war_room.py` | **General de Guerra.** Gera opiniões estruturadas dos agentes IA. |
+| 📄 `supabase_client.py` | **Sync de Dados.** Gerencia o ciclo de vida do sinal (Awaiting -> Closed). |
+| 📄 `clean_db.py` | **Sanidade.** Limpa dados de teste para iniciar o dia com métricas zeradas. |
+| 📄 `diagnose_today.py` | **Auditoria.** Explica por que o robô não entrou em trades (filtros de volume/wick). |
+| 📄 `fix_signal.py` | **Utilitário.** Corrige retroativamente direção ou opiniões de sinais. |
+| 📄 `config.yaml` | **Cérebro Estratégico.** Parâmetros de risco, modo de execução e metas. |
 
 ---
 
 ## 🚀 3. Motores de Performance (Avançado)
 
-### 🧠 A. Sala de Guerra Agêntica (AIA)
-O robô não opera mais sozinho. Ao detectar um sinal, ele o envia para a "nuvem" e aguarda até 30s.
-- **Aprovação:** Se o contexto macro (tendência, notícias) for favorável, os agentes aprovam.
-- **Veto:** Evita entradas contra a tendência ou em momentos de notícias de alto impacto.
+### 🧠 A. Sala de Guerra Agêntica (Real Opinions)
+O robô envia o sinal e o `auto_war_room.py` gera sentimentos reais:
+- **Jim Simons:** Focado em exaustão estatística e Delta.
+- **Druckenmiller:** Focado em estrutura de liquidez e H1.
+- **Nassim Taleb:** Focado em risco de cauda e convexidade.
+- **Status VALIDADO:** Substitui o rótulo antigo "ALTA" para evitar confusão em sinais de venda.
 
-### 💰 B. Gestão de Meta e Auto-Shutdown
-O sistema possui consciência financeira.
-- **Meta Diária:** Ao atingir o lucro alvo (ex: $100), o robô encerra a sessão e se desliga.
-- **Proteção de Capital:** Limite de perda (Stop Loss Diário) encerra as operações para proteger o saldo.
+### ⚡ B. Modos de Execução (`execution_mode`)
+- **MARKET:** Execução imediata no gatilho. Ideal para mercados rápidos para não "perder o bonde".
+- **LIMIT:** Aguarda um recuo (retracement) para pegar um preço melhor. Mais defensivo.
+
+### 💰 C. Fidelidade de P&L
+O sistema não usa mais estimativas. O `bot_liquidez.py` lê o histórico de `deals` do MT5 e envia o lucro/prejuízo exato (incluindo taxas e swap) para o Dashboard.
 
 ---
 
 ## 🛠️ 4. Guia de Operação Autônoma
 
 ### 🚦 Iniciando a Sessão
-Basta executar o arquivo mestre na raiz:
 1.  Rode o **`FULL_START.bat`**.
-2.  O `@analyst` fará a leitura de mercado e ajustará os filtros no `config.yaml`.
-3.  O Dashboard e o Robô subirão automaticamente.
+2.  O sistema limpará os testes, ajustará o `config.yaml` e abrirá as 4 janelas de controle.
 
-### 📊 Monitoramento
-Acompanhe tudo pelo endpoint de vigilância:
-- [https://trade-two-smoky.vercel.app/monitor](https://trade-two-smoky.vercel.app/monitor)
-- Verifique o card **SALA DE GUERRA AGÊNTICA** para ver os julgamentos da IA em tempo real.
+### 📊 Monitoramento e Endpoints
+- **Painel Ao Vivo:** Visão geral com métricas de PNL real e bot status.
+- **Monitor Zonas H1:** Foco na saúde técnica e Sala de Guerra ativa.
+- **Histórico:** Log de todos os sinais capturados.
+- **Gatilhos (Novo):** Detalhamento técnico exclusivo de ordens **executadas** e performance por trade.
 
 ---
 
 ## 🧠 5. Configuração Dinâmica (`config.yaml`)
 
-Principais chaves para ajuste fino:
-*   `use_agent_consensus`: Ativa/Desativa o veto da IA.
-*   `daily_profit_target`: Define quando o dia "acaba" com vitória.
-*   `require_volume_momentum`: Flexibiliza a entrada em mercados lentos.
+*   `execution_mode`: Alterne entre `market` e `limit`.
+*   `daily_profit_target`: Meta financeira para o auto-shutdown.
+*   `use_agent_consensus`: Ativa o veto/aprovação da Sala de Guerra.
 
 ---
-*Manual Mestre v4.0 Agêntica - Synkra AIOX Ecosystem*
+*Manual Mestre v4.1 Agêntica - Synkra AIOX Ecosystem*
