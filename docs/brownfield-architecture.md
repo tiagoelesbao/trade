@@ -1,100 +1,64 @@
-# Trade Liquidez Python - Documento de Arquitetura Brownfield
+# Trade Liquidez Python - Documento de Arquitetura Brownfield (v5.5 Sniper)
 
-**Data:** 11 de Abril de 2026
-**Autor:** @architect (Aria)
-**Status:** Atualizado via PRD de Integração
+**Data:** 18 de Abril de 2026
+**Autor:** @dex (Engineer)
+**Status:** Consolidado (Versão Multi-Pair Profissional)
 
 ---
 
 ## 1. Introdução
 
-Este documento captura o estado ATUAL (Realidade) do projeto `trade-liquidez-python` e define como a nova arquitetura de integração orquestrada por agentes AIOX será implementada sobre a base de código existente.
+Este documento captura a arquitetura final da v5.5 do projeto `trade-liquidez-python`, detalhando a integração entre o motor Python de alta performance e a camada agêntica AIOX.
 
-### Escopo do Documento
-Focado na integração entre o framework AIOX (Node.js/TS) e o motor de execução de trading em Python localizado em `squads/trade-liquidez-python/scripts/`.
-
----
-
-## 2. Referência Rápida - Arquivos e Pontos de Entrada
-
-### Arquivos Críticos para Entendimento do Sistema
-- **Motor de Execução Principal:** `squads/trade-liquidez-python/scripts/bot_liquidez.py` (Lógica de bot real-time).
-- **Backtesting & Análise:** `squads/trade-liquidez-python/scripts/backtest_liquidez.py`.
-- **Configuração do Squad:** `squads/trade-liquidez-python/squad.yaml`.
-- **Configurações Gerais:** `squads/trade-liquidez-python/config.yaml`.
-- **Pintor Gráfico (MT5/MQL5):** `squads/trade-liquidez-python/scripts/PintorLiquidez.mq5`.
-
-### Áreas de Impacto do Novo PRD
-- `squads/trade-liquidez-python/scripts/`: Adição de logging JSONL e Sanity Checks.
-- `.aiox-core/development/tasks/`: Criação de novas tarefas para orquestração dos agentes.
+### Evolução da Realidade
+O sistema migrou de um protótipo de ativo único (WIN$) para uma **Central de Trading Global** capaz de monitorar e executar operações em 10+ mercados simultaneamente com paridade total de dados.
 
 ---
 
-## 3. Arquitetura de Alto Nível (Estado Atual)
+## 2. Referência de Arquivos (Fluxo v5.5)
 
-### Resumo Técnico
-O sistema utiliza uma abordagem de **Trading Algorítmico Candle a Candle** focado no ativo `WIN$` (Mini Índice B3), operando via integração MetaTrader 5 (MT5).
-
-### Pilha Tecnológica Real
-| Categoria | Tecnologia | Versão | Notas |
-|----------|------------|---------|--------|
-| Runtime | Python | 3.x | Dependência de `MetaTrader5`, `pandas`, `numpy`. |
-| Orquestrador | AIOX Framework | 1.x | Gerencia os agentes e fluxos de trabalho. |
-| Plataforma | MetaTrader 5 | Atual | Broker-interface obrigatória para execução. |
-
-### Estrutura do Repositório (Realidade)
-```text
-C:\Users\Pichau\Desktop\trade\
-├── squads/trade-liquidez-python/
-│   ├── agents/          # Configurações específicas dos agentes do squad
-│   ├── scripts/         # O "Motor": bots, backtests e ferramentas Python
-│   ├── tasks/           # Definições de tarefas locais do squad
-│   ├── squad.yaml       # Definição dos papéis (Simons, Druckenmiller, etc.)
-│   └── run_watchdog.bat # Utilitário de monitoramento local
-├── .aiox-core/          # O Core do framework (Orquestração)
-└── docs/prd.md          # Documento de requisitos para a integração
-```
+### Componentes Críticos
+- **Orquestrador:** `FULL_START.bat` (Gerencia o ciclo de vida do ambiente).
+- **Motor Multi-Pair:** `squads/trade-liquidez-python/scripts/bot_liquidez.py`.
+- **Integrador Cloud:** `squads/trade-liquidez-python/scripts/supabase_client.py`.
+- **General de Guerra:** `squads/trade-liquidez-python/scripts/auto_war_room.py`.
+- **Backtesting:** `squads/trade-liquidez-python/scripts/market_replay.py` (Engine Ultra-Veloz).
 
 ---
 
-## 4. O Squad de Liquidez
+## 3. Arquitetura de Dados e Sincronia
 
-O projeto possui um squad especializado baseado em figuras lendárias do mercado:
+### O Fluxo "High-Fidelity"
+O sistema garante 100% de paridade entre Broker e Dashboard:
+1.  **Sinal:** Python detecta pavio M15 em zona consolidada.
+2.  **Aprovação:** Sala de Guerra AIOX valida via Supabase (JSONB Opinions).
+3.  **Execução:** Ordem MARKET enviada ao MT5 com auto-filling (FOK/IOC).
+4.  **Fechamento:** Python monitora o histórico de *deals* do MT5 e envia o P&L real ao fechar.
 
-1. **Stanley Druckenmiller (Macro Agent):** Valida contexto H1 (tendência institucional).
-2. **Jim Simons (Quant Agent):** Analisa gatilhos estatísticos em M5 (geometria de pavios/volatilidade).
-3. **Paul Tudor Jones (Execution Agent):** Gerencia o envio de ordens `LIMIT` a 50% do pavio.
-4. **Nassim Taleb (Risk Agent):** Aplica a regra estrita de saída em 6 candles para evitar "caudas longas" perdedoras.
-
----
-
-## 5. Dívida Técnica e Pontos de Atenção
-
-1. **Comunicação Acoplada:** Atualmente, os scripts Python e os agentes AIOX operam de forma independente (via shell direto). Falta uma ponte de estado compartilhada.
-2. **Logs Textuais:** Os scripts geram logs para visualização humana, dificultando a automação de auditoria pelos agentes QA.
-3. **Gerenciamento de Erros:** Se o MT5 desconectar, o script Python falha, mas o agente AIOX pode não detectar a falha imediatamente.
-
----
-
-## 6. Padrões de Integração (Propostos no PRD)
-
-Com a nova integração (PRD Melhorado pela Aria):
-
-- **Bridge de Logs:** Mudança para **JSONL** em todos os scripts Python em `scripts/`.
-- **Sanity Checks:** Cada script verificará chaves de API e conexão MT5 antes do loop principal.
-- **Daemon Mode:** Suporte para que `bot_liquidez.py` rode continuamente, reportando status via pulso (heartbeat).
+### Pilha Tecnológica v5.5
+| Categoria | Tecnologia | Notas |
+|----------|------------|-------|
+| Runtime | Python 3.13 | Processamento paralelo de múltiplos ativos. |
+| DB Cloud | Supabase | Barramento de eventos em tempo real. |
+| Interface | Next.js 14 | Visualização consolidada de P&L Global. |
+| Broker | MT5 | Terminal de execução com ponte CSV específica por par. |
 
 ---
 
-## 7. Comandos Úteis
+## 4. O Squad de Liquidez v5.5
 
-```bash
-# Executar backtest de liquidez
-python squads/trade-liquidez-python/scripts/backtest_liquidez.py
-
-# Iniciar o bot de produção
-python squads/trade-liquidez-python/scripts/bot_liquidez.py
-```
+A estratégia Sniper é governada pela confluência de 3 pilares:
+1.  **Zonas Micro (M15):** Inteligência de pontos de entrada frequentes.
+2.  **Filtro Macro (SMA 20 H1):** Proteção contra tendências explosivas (faca caindo).
+3.  **Oscilador (RSI 14):** Identificação de exaustão técnica e reversão de preço.
 
 ---
-*Documento gerado automaticamente pela @architect baseando-se no PRD de 11/04/2026.*
+
+## 5. Resiliência Operacional
+
+- **Erro 10030 (Filling Mode):** Mitigado via tentativa sequencial automática.
+- **Fuso Horário:** Sincronizado via busca agressiva de histórico (Janela Broker vs Local).
+- **Ambiente:** Sanitização automática via `clean_db.py` a cada novo boot.
+
+---
+*Documento consolidado após a grande atualização Multi-Pair Sniper v5.5.*

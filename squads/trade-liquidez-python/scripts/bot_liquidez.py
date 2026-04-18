@@ -153,29 +153,35 @@ def send_order(symbol, order_data):
         if res.retcode == mt5.TRADE_RETCODE_DONE: return res
     return res
 
-def get_total_pnl():
-    from_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-    deals = mt5.history_deals_get(from_date, datetime.now() + timedelta(hours=2))
+def get_session_pnl(start_time):
+    # Busca deals desde o momento exato que o robô foi ligado
+    from_date = start_time
+    to_date = datetime.now() + timedelta(hours=2)
+    deals = mt5.history_deals_get(from_date, to_date)
     if not deals: return 0.0
+    # Soma apenas trades deste robô (Magic Number)
     return sum([d.profit + d.commission + d.swap for d in deals if d.magic == MAGIC_NUMBER])
 
 def main():
     if not initialize_mt5(): return
-    initial_pnl = get_total_pnl()
-    active_signals = {} # {symbol: signal_id}
-    cooldowns = {}
+    mode = CFG.get('execution_mode', 'limit').upper()
+    
+    # Marca o momento exato do início da sessão
+    SESSION_START = datetime.now() - timedelta(seconds=1)
     
     print(f"🚀 CENTRAL MULTI-PAIR ATIVA: {len(SYMBOLS)} ATIVOS")
     try:
         while True:
-            total_pnl = get_total_pnl() - initial_pnl
+            # P&L da Sessão agora é calculado de forma absoluta desde o start
+            session_pnl = get_session_pnl(SESSION_START)
+            
             os.system('cls' if os.name == 'nt' else 'clear')
             print("="*65)
-            print(f" SQUAD LIQUIDEZ v5.5 | {datetime.now().strftime('%H:%M:%S')} | P&L SESSÃO: ${total_pnl:.2f}")
+            print(f" SQUAD LIQUIDEZ v5.5.1 | {datetime.now().strftime('%H:%M:%S')} | P&L SESSÃO: ${session_pnl:.2f}")
             print(f" ATIVOS: {', '.join(SYMBOLS[:5])}...")
             print("="*65)
 
-            if total_pnl >= CFG.get('daily_profit_target', 100.0):
+            if session_pnl >= CFG.get('daily_profit_target', 100.0):
                 print("🏆 META DIÁRIA BATIDA! ENCERRANDO SESSÃO."); break
 
             for symbol in SYMBOLS:
