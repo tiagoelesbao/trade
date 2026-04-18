@@ -16,22 +16,22 @@ O sistema opera em um ciclo fechado de inteligência multi-ativo e visualizaçã
 ```mermaid
 graph TD
     subgraph "CAMADA CLOUD (Vercel/Supabase)"
-    A[Dashboard v5.5] <-->|Real-time| B[(Supabase DB)]
-    H[auto_war_room.py] <-->|Opiniões Reais| B
+    A["Dashboard v5.5"] <-->|Real-time| B[("Supabase DB")]
+    H["auto_war_room.py"] <-->|Opiniões Reais| B
     end
 
     subgraph "CAMADA LOCAL (MetaTrader 5)"
-    C[bot_liquidez.py] -->|1. Loop Multi-Ativo| B
+    C["bot_liquidez.py"] -->|1. Loop Multi-Ativo| B
     B -->|2. Voto AIA| C
-    C -->|3. Ordem Market/Limit| D[10+ Gráficos MT5]
-    C -->|4. Sync Visual Indiv.| E[liquidez_data_SYMBOL.csv]
+    C -->|3. Ordem Market/Limit| D["10+ Gráficos MT5"]
+    C -->|4. Sync Visual Indiv.| E["liquidez_data_SYMBOL.csv"]
     end
 
     subgraph "CICLO AUTÔNOMO"
-    G[FULL_START.bat] -->|Fase 0: Limpeza| K[clean_db.py]
-    G -->|Fase 1: Setup| I[@analyst - Config Sniper]
+    G["FULL_START.bat"] -->|Fase 0: Limpeza| K["clean_db.py"]
+    G -->|Fase 1: Setup| I["@analyst - Config Sniper"]
     I -->|Setup| C
-    C -->|Auto-Shutdown| J[Meta $100/dia Batida]
+    C -->|Auto-Shutdown| J["Meta $100/dia Batida"]
     end
 ```
 

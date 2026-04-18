@@ -65,22 +65,26 @@ def run_replay_for_symbol(symbol, local_cfg):
         
         if active_position:
             pos = active_position
-            pips_diff = 0; closed = False
+            pips_diff = 0; closed = False; exit_p = 0
             
             if pos['type'] == 'BUY':
-                if candle['low'] <= pos['sl']: pips_diff = (pos['sl'] - pos['entry']) / (point * 10); closed = True; reason = 'SL'
-                elif candle['high'] >= pos['tp']: pips_diff = (pos['tp'] - pos['entry']) / (point * 10); closed = True; reason = 'TP'
+                if candle['low'] <= pos['sl']: 
+                    pips_diff = (pos['sl'] - pos['entry']) / (point * 10); closed = True; reason = 'SL'; exit_p = pos['sl']
+                elif candle['high'] >= pos['tp']: 
+                    pips_diff = (pos['tp'] - pos['entry']) / (point * 10); closed = True; reason = 'TP'; exit_p = pos['tp']
             else:
-                if candle['high'] >= pos['sl']: pips_diff = (pos['entry'] - pos['sl']) / (point * 10); closed = True; reason = 'SL'
-                elif candle['low'] <= pos['tp']: pips_diff = (pos['entry'] - pos['tp']) / (point * 10); closed = True; reason = 'TP'
+                if candle['high'] >= pos['sl']: 
+                    pips_diff = (pos['entry'] - pos['sl']) / (point * 10); closed = True; reason = 'SL'; exit_p = pos['sl']
+                elif candle['low'] <= pos['tp']: 
+                    pips_diff = (pos['entry'] - pos['tp']) / (point * 10); closed = True; reason = 'TP'; exit_p = pos['tp']
             
             if not closed and (i - pos['idx']) >= local_cfg['exit_candles_max']:
-                pips_diff = (candle['close'] - pos['entry']) / (point * 10) if pos['type'] == 'BUY' else (pos['entry'] - candle['close']) / (point * 10); closed = True; reason = 'TIME'
+                pips_diff = (candle['close'] - pos['entry']) / (point * 10) if pos['type'] == 'BUY' else (pos['entry'] - candle['close']) / (point * 10); closed = True; reason = 'TIME'; exit_p = candle['close']
                 
             if closed:
                 pnl_usd = (pips_diff * 10.0) - cost_per_trade
                 balance += pnl_usd
-                trades_history.append({**pos, 'pnl': pnl_usd, 'reason': reason, 'close_time': curr_time})
+                trades_history.append({**pos, 'pnl': pnl_usd, 'reason': reason, 'close_time': curr_time, 'exit_price': exit_p})
                 active_position = None
             continue
 
@@ -111,11 +115,12 @@ def run_replay_for_symbol(symbol, local_cfg):
     audit_file = os.path.join(MT5_DATA_PATH, "MQL5", "Files", f"audit_backtest_{symbol}.csv")
     try:
         with open(audit_file, "w", encoding="ansi") as f:
-            f.write("type,price,time,pnl,z_price,rsi,trend\n")
+            f.write("type,price,time,pnl,z_price,rsi,trend,exit_price,exit_time\n")
             for t in trades_history:
                 t_type = "SIGNAL_BUY" if t['type'] == 'BUY' else "SIGNAL_SELL"
                 mt5_time = t['time'].strftime('%Y.%m.%d %H:%M')
-                f.write(f"{t_type},{t['entry']},{mt5_time},{t['pnl']},{t['z_price']},{t['rsi']:.1f},{t['trend']}\n")
+                exit_time = t['close_time'].strftime('%Y.%m.%d %H:%M')
+                f.write(f"{t_type},{t['entry']},{mt5_time},{t['pnl']},{t['z_price']},{t['rsi']:.1f},{t['trend']},{t['exit_price']},{exit_time}\n")
     except: pass
 
     return balance, trades_history
@@ -142,7 +147,7 @@ def generate_exec_report(all_results):
 
 def run_batch_test():
     print("="*65)
-    print(" 🚨 BIG BACKTEST REALISTA v5.6: COM CUSTOS E AUDITORIA ")
+    print(" 🚀 BIG BACKTEST REALISTA v5.6: COM CUSTOS E AUDITORIA ")
     print("="*65)
     total_pnl = 0.0
     all_results = []
