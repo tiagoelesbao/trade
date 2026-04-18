@@ -47,7 +47,7 @@ start "Robo de Liquidez" cmd /k "python squads/trade-liquidez-python/scripts/bot
 echo.
 echo ==================================================
 echo   SISTEMA ONLINE E EM MODO OFENSIVO v4.0!
-echo   Aprovação Agêntica e Rastreamento de P&L Ativos.
+echo   Aprovação Agêntica e Rastreamento de P^^^&L Ativos.
 echo   O robo encerrara automaticamente ao bater a meta.
 echo ==================================================
 echo.
