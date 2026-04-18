@@ -168,6 +168,8 @@ def main():
     
     # Marca o momento exato do início da sessão
     SESSION_START = datetime.now() - timedelta(seconds=1)
+    active_signals = {} # {symbol: signal_id}
+    cooldowns = {}
     
     print(f"🚀 CENTRAL MULTI-PAIR ATIVA: {len(SYMBOLS)} ATIVOS")
     try:
