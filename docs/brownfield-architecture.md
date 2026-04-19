@@ -1,64 +1,49 @@
-# Trade Liquidez Python - Documento de Arquitetura Brownfield (v5.5 Sniper)
+# Trade Liquidez Python - Documento de Arquitetura Brownfield (v5.6 Auditor)
 
 **Data:** 18 de Abril de 2026
 **Autor:** @dex (Engineer)
-**Status:** Consolidado (Versão Multi-Pair Profissional)
+**Status:** Consolidado (Versão Final de Auditoria)
 
 ---
 
 ## 1. Introdução
 
-Este documento captura a arquitetura final da v5.5 do projeto `trade-liquidez-python`, detalhando a integração entre o motor Python de alta performance e a camada agêntica AIOX.
-
-### Evolução da Realidade
-O sistema migrou de um protótipo de ativo único (WIN$) para uma **Central de Trading Global** capaz de monitorar e executar operações em 10+ mercados simultaneamente com paridade total de dados.
+Este documento detalha a infraestrutura técnica da v5.6 Sniper, focada em precisão matemática e transparência visual para auditoria de alto nível.
 
 ---
 
-## 2. Referência de Arquivos (Fluxo v5.5)
+## 2. Referência de Arquivos (Fluxo v5.6)
 
-### Componentes Críticos
-- **Orquestrador:** `FULL_START.bat` (Gerencia o ciclo de vida do ambiente).
-- **Motor Multi-Pair:** `squads/trade-liquidez-python/scripts/bot_liquidez.py`.
-- **Integrador Cloud:** `squads/trade-liquidez-python/scripts/supabase_client.py`.
-- **General de Guerra:** `squads/trade-liquidez-python/scripts/auto_war_room.py`.
-- **Backtesting:** `squads/trade-liquidez-python/scripts/market_replay.py` (Engine Ultra-Veloz).
+### Componentes de Auditoria
+- **Auditor Visual:** `squads/trade-liquidez-python/scripts/AuditorBacktest.mq5` (Script de traçado de trajetórias).
+- **Faxina Gráfica:** `squads/trade-liquidez-python/scripts/LimparGrafico.mq5` (Script de limpeza de objetos).
+- **Motor Realista:** `squads/trade-liquidez-python/scripts/market_replay.py` (Simulador com custos operacionais).
 
 ---
 
-## 3. Arquitetura de Dados e Sincronia
+## 3. Lógica de P&L Absoluto (v5.6.1)
 
-### O Fluxo "High-Fidelity"
-O sistema garante 100% de paridade entre Broker e Dashboard:
-1.  **Sinal:** Python detecta pavio M15 em zona consolidada.
-2.  **Aprovação:** Sala de Guerra AIOX valida via Supabase (JSONB Opinions).
-3.  **Execução:** Ordem MARKET enviada ao MT5 com auto-filling (FOK/IOC).
-4.  **Fechamento:** Python monitora o histórico de *deals* do MT5 e envia o P&L real ao fechar.
-
-### Pilha Tecnológica v5.5
-| Categoria | Tecnologia | Notas |
-|----------|------------|-------|
-| Runtime | Python 3.13 | Processamento paralelo de múltiplos ativos. |
-| DB Cloud | Supabase | Barramento de eventos em tempo real. |
-| Interface | Next.js 14 | Visualização consolidada de P&L Global. |
-| Broker | MT5 | Terminal de execução com ponte CSV específica por par. |
+Diferente das versões anteriores que usavam o horário do broker para filtrar o lucro de "hoje", a arquitetura v5.6.1 utiliza:
+1.  **Fixed Timestamp:** O robô grava o segundo exato do boot em `SESSION_START`.
+2.  **Cumulative Scan:** A busca de histórico (`history_deals_get`) é feita do boot até agora + 2h de margem.
+3.  **Result:** Terminal e Dashboard ficam 100% sincronizados, ignorando viradas de meia-noite ou desencontros de fuso horário.
 
 ---
 
-## 4. O Squad de Liquidez v5.5
+## 4. Auditoria de Trajetória (Visual Path)
 
-A estratégia Sniper é governada pela confluência de 3 pilares:
-1.  **Zonas Micro (M15):** Inteligência de pontos de entrada frequentes.
-2.  **Filtro Macro (SMA 20 H1):** Proteção contra tendências explosivas (faca caindo).
-3.  **Oscilador (RSI 14):** Identificação de exaustão técnica e reversão de preço.
-
----
-
-## 5. Resiliência Operacional
-
-- **Erro 10030 (Filling Mode):** Mitigado via tentativa sequencial automática.
-- **Fuso Horário:** Sincronizado via busca agressiva de histórico (Janela Broker vs Local).
-- **Ambiente:** Sanitização automática via `clean_db.py` a cada novo boot.
+A integração MT5-Python agora suporta o traçado do ciclo de vida do trade:
+- **Camada 1 (Preço):** Preço de Entrada (Seta) e Preço de Saída (Pin).
+- **Camada 2 (Vetor):** Trendline conectando ambos os pontos, colorida por PNL.
+- **Camada 3 (Contexto):** Retângulo de zona e texto com valor de RSI e Trend no momento do gatilho.
 
 ---
-*Documento consolidado após a grande atualização Multi-Pair Sniper v5.5.*
+
+## 5. Resiliência e Segurança
+
+- **Auto-Filling:** Implementada a tentativa automática FOK -> IOC -> RETURN para furar bloqueios de preenchimento da corretora.
+- **Error Protection:** O status no Dashboard só transiciona para ACTIVE se o terminal confirmar o `retcode` 10009 (Done).
+- **Multi-Pair Dictionary:** O motor gerencia estados de sinais ativos por chave de símbolo, evitando colisões de dados em operações paralelas.
+
+---
+*Documentação técnica consolidada v5.6.*
