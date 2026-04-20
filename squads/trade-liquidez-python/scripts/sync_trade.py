@@ -1,46 +1,65 @@
+import MetaTrader5 as mt5
+from datetime import datetime, timedelta
 import os
+import yaml
 import sys
-from datetime import datetime
-import random
 
-# Adiciona caminhos
-sys.path.append(os.path.join(os.getcwd(), 'squads', 'trade-liquidez-python', 'scripts'))
+# Carrega Config
+config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "config.yaml")
+with open(config_path, "r", encoding="utf-8") as f:
+    CFG = yaml.safe_load(f)
+
+sys.path.append(os.path.dirname(__file__))
 from supabase_client import SupabaseManager
+db = SupabaseManager()
 
-def sync_missing_trade():
-    db = SupabaseManager()
-    if not db.client: return
+def sync():
+    if not mt5.initialize(): return
+    print("🚀 INICIANDO SINCRONIA DE LIMPEZA...")
 
-    print("--- SINCRONIZANDO TRADE PERDIDO (-$42.00) ---")
+    # 1. Pega histórico real total (desde o início da conta)
+    from_date = datetime(2020, 1, 1)
+    deals = mt5.history_deals_get(from_date, datetime.now() + timedelta(days=1))
     
-    # Dados extraídos do seu print do MT5
-    trade_data = {
-        "symbol": "EURUSD",
-        "type": "BUY",
-        "price": 1.17864,
-        "sl": 1.17822,
-        "tp": 1.17876,
-        "magic": 123456,
-        "wick_pct": 0.62, # Estimado
-        "status": "closed",
-        "pnl": -42.00,
-        "agent_opinions": [
-            {
-                "agent": "Jim Simons",
-                "avatar": "JS",
-                "comment": "Gatilho detectado em zona de suporte. Operação encerrada por Stop Loss técnico.",
-                "sentiment": "bullish",
-                "confidence": 85
-            }
-        ],
-        "closed_at": "2026-04-16T12:12:12Z"
-    }
+    if not deals:
+        print("Nenhum trade encontrado no MT5.")
+        return
 
-    try:
-        db.client.table("signals_liquidez").insert(trade_data).execute()
-        print("✅ Trade de -$42.00 sincronizado com o Dashboard!")
-    except Exception as e:
-        print(f"Erro ao sincronizar: {e}")
+    # 2. Limpa o banco de dados de sinais duplicados/errados para recomeçar limpo
+    # (Apenas para sinais desse robô)
+    print("🧹 Limpando registros antigos para re-sincronização...")
+    db.client.table("signals_liquidez").delete().neq("id", "00000000-0000-0000-0000-000000000000").execute()
+
+    # 3. Insere cada trade do histórico real uma única vez
+    inserted = 0
+    for d in deals:
+        if d.magic != CFG['magic_number'] or d.entry != 1: continue
+        
+        in_deals = mt5.history_deals_get(position=d.position_id)
+        if not in_deals: continue
+        
+        pnl = d.profit + d.commission + d.swap
+        entry_time = datetime.fromtimestamp(in_deals[0].time).isoformat()
+        
+        new_trade = {
+            "symbol": d.symbol,
+            "type": "BUY" if in_deals[0].type == 0 else "SELL",
+            "price": in_deals[0].price,
+            "status": "closed",
+            "pnl": pnl,
+            "magic": d.position_id, # Usamos o campo magic para guardar o ID da POSIÇÃO e evitar duplicidade
+            "wick_pct": 0.5,
+            "agent_opinions": [{"agent": "Auditor", "comment": "Sincronizado via Relatório Real", "sentiment": "neutral"}],
+            "created_at": entry_time,
+            "closed_at": datetime.fromtimestamp(d.time).isoformat()
+        }
+        
+        db.client.table("signals_liquidez").insert(new_trade).execute()
+        inserted += 1
+        print(f"✅ Sincronizado: {d.symbol} | PNL: {pnl:.2f}")
+
+    print(f"\n✨ Sincronia concluída! {inserted} trades reais restaurados.")
+    mt5.shutdown()
 
 if __name__ == "__main__":
-    sync_missing_trade()
+    sync()

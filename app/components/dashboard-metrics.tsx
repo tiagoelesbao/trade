@@ -14,53 +14,45 @@ export function DashboardMetrics() {
   })
 
   const fetchMetrics = async () => {
-    // 1. Zonas Ativas (Último Heartbeat)
+    // 1. FONTE ÚNICA DE VERDADE: Pega métricas REAIS calculadas pelo robô no Heartbeat
     const { data: heartbeat } = await supabase
       .from('bot_heartbeats')
-      .select('active_zones')
+      .select('active_zones, pnl_today, pnl_total')
+      .eq('symbol', 'GLOBAL')
       .order('created_at', { ascending: false })
       .limit(1)
     
-    // 2. Sinais e PNL
+    // 2. Estatísticas de Volume (Mantemos apenas para contagem de sinais)
     const { data: signals } = await supabase
       .from('signals_liquidez')
-      .select('pnl, wick_pct, created_at, status')
+      .select('wick_pct, created_at')
 
     if (signals) {
       const now = new Date()
-      const last24h = new Date(now.getTime() - 24 * 60 * 60 * 1000)
-      const startOfDay = new Date(now.setHours(0, 0, 0, 0))
-
-      const signals24h = signals.filter(s => new Date(s.created_at) > last24h).length
-      const wicks = signals.filter(s => new Date(s.created_at) > last24h).map(s => s.wick_pct || 0)
+      const last24h = now.getTime() - (24 * 60 * 60 * 1000)
+      const signals24h = signals.filter(s => new Date(s.created_at).getTime() > last24h).length
+      const wicks = signals.filter(s => new Date(s.created_at).getTime() > last24h).map(s => s.wick_pct || 0)
       const avgWick = wicks.length > 0 ? (wicks.reduce((a, b) => a + b, 0) / wicks.length) * 100 : 0
       
-      const resultDay = signals
-        .filter(s => s.status === 'closed' && new Date(s.created_at) > startOfDay)
-        .reduce((acc, s) => acc + (s.pnl || 0), 0)
+      const hb = heartbeat?.[0]
       
-      const totalPnl = signals
-        .filter(s => s.status === 'closed')
-        .reduce((acc, s) => acc + (s.pnl || 0), 0)
-
+      // ATUALIZAÇÃO: Agora usamos o valor que o robô enviou, sem cálculos no JS
       setMetrics({
-        activeZones: heartbeat?.[0]?.active_zones || 0,
+        activeZones: hb?.active_zones || 0,
         signals24h,
         avgWick,
-        resultDay,
-        totalPnl
+        resultDay: hb?.pnl_today || 0, 
+        totalPnl: hb?.pnl_total || 0   
       })
     }
   }
 
   useEffect(() => {
     fetchMetrics()
-    
-    const channel = supabase.channel('metrics-db-changes')
+    const channel = supabase.channel('metrics-integrity-v2')
+      .on('postgres_changes', { event: '*', table: 'bot_heartbeats' }, () => fetchMetrics())
       .on('postgres_changes', { event: '*', table: 'signals_liquidez' }, () => fetchMetrics())
-      .on('postgres_changes', { event: 'INSERT', table: 'bot_heartbeats' }, () => fetchMetrics())
       .subscribe()
-
     return () => { supabase.removeChannel(channel) }
   }, [])
 
@@ -69,7 +61,7 @@ export function DashboardMetrics() {
       <div className="flex flex-col gap-2">
         <div className="flex items-center gap-2 text-gray-400">
           <Activity className="h-5 w-5 text-[#0047AB]" />
-          <span className="text-lg">Zonas H1 Ativas</span>
+          <span className="text-lg">Zonas M15 Ativas</span>
         </div>
         <div className="text-5xl md:text-4xl lg:text-5xl font-bold text-white">{metrics.activeZones}</div>
       </div>
@@ -91,7 +83,7 @@ export function DashboardMetrics() {
         </div>
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2 text-gray-400 text-sm">
-            <span>Result (Day)</span>
+            <span>Lucro Hoje (MT5)</span>
           </div>
           <span className={`text-2xl md:text-xl lg:text-2xl font-semibold ${metrics.resultDay >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
             ${metrics.resultDay.toFixed(2)}
@@ -100,7 +92,7 @@ export function DashboardMetrics() {
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2 text-gray-400 text-sm">
             <Wallet className="h-4 w-4" />
-            <span>Total PNL</span>
+            <span>Total PNL (MT5)</span>
           </div>
           <span className={`text-2xl md:text-xl lg:text-2xl font-semibold ${metrics.totalPnl >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
             ${metrics.totalPnl.toFixed(2)}
