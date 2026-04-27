@@ -43,6 +43,15 @@ coverage/
 tmp/
 temp/
 *.tmp
+signals_tmp.json
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+
+# Bot state files
+.consumed_zones.json
 
 # Supabase
 .supabase/
@@ -50,3 +59,6 @@ supabase/.temp/
 supabase/functions/.import_map.json
 
 .vercel
+
+# ETL binaries (large files >50MB - use Git LFS or install locally)
+services/ETL/yt-dlp_win/

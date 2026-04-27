@@ -83,7 +83,7 @@ export function DashboardMetrics() {
         </div>
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2 text-gray-400 text-sm">
-            <span>Lucro Hoje (MT5)</span>
+            <span>P&amp;L Sessão (MT5)</span>
           </div>
           <span className={`text-2xl md:text-xl lg:text-2xl font-semibold ${metrics.resultDay >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
             ${metrics.resultDay.toFixed(2)}

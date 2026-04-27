@@ -1,31 +1,108 @@
-# --- ESTRATÉGIA LIQUIDEZ v5.5 (MULTI-PAIR SNIPER) ---
-symbols: ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD", "EURGBP", "EURJPY", "GBPJPY"]
-zone_timeframe: "M15"         # Timeframe das zonas (M15 para maior frequência)
-lookback_zones: 100            # Candles para trás para buscar zonas
-min_displacement_candles: 7    # Força da reversão para confirmar zona
-zone_merge_points: 30          # Proximidade para fundir zonas (Pips * 10)
-cooldown_candles: 12           # Espera 1h (12 candles M5) após operar na mesma zona
+# ==========================================
+# TRADE LIQUIDEZ - CONFIG v6.0
+# Sincronizado com bot_liquidez.py + auto_war_room.py
+# Data: 2026-04-21
+# ==========================================
 
-# --- FILTROS DE ENTRADA (BACKTESTED v5.4) ---
-min_wick_pct: 0.30             # Pavio mínimo em relação ao corpo
-rsi_overbought: 60             # IFR acima disso para Venda
-rsi_oversold: 40               # IFR abaixo disso para Compra
-use_trend_filter: true         # Só opera a favor da Média de 20 em H1
-require_color_reversal: true    # Exige candle de reversão (Segurança)
+# --- SÍMBOLOS OPERADOS ---
+symbols:
+  - EURUSD
+  - GBPUSD
+  # - USDJPY  # DESATIVADO: WR 42.1% (8/19), P&L -$232.29 | JPY tendência forte vs estratégia reversão
+  - AUDUSD
+  - USDCAD
+  - USDCHF
+  - NZDUSD
+  - EURGBP
+  # - EURJPY  # DESATIVADO: WR 16.7% (1/6), P&L -$85.56
+  # - GBPJPY  # DESATIVADO: BAIXO WINRATE
+
+# --- TIMEFRAME E ZONAS ---
+zone_timeframe: "M15"           # Timeframe para detecção de zonas (15 minutos)
+lookback_zones: 100             # Candles para trás na busca de zonas
+min_displacement_candles: 7     # Confirmação de zona: 7 candles de afastamento
+
+# --- FILTROS DE ENTRADA (SNIPER) ---
+min_wick_pct: 0.30              # Pavio mínimo: 30% da vela total
+rsi_period: 9                   # v6.1.3: promovido sem A/B (item H do parecer, clássico mais reativo)
+rsi_overbought: 70              # RSI acima deste valor = sobrecompra (SELL)
+rsi_oversold: 30                # RSI abaixo deste valor = sobrevenda (BUY)
+use_trend_filter: false         # DESATIVADO v6.1.1 — trader feedback: slope invertido p/ contra-tendência
+require_color_reversal: false   # DESATIVADO v6.1.1 — trader feedback: atrasa entrada no ponto ótimo
+
+# --- PROTEÇÕES OPERACIONAIS ---
+# Kill-Zone (cooldown_hours / proximity_pips) e One-Shot de zonas REMOVIDOS em v6.1.4
+# (decisão do trader, 2026-04-22): estavam privando bons trades sem sinal de benefício
+# estatístico. Proteção pós-trade agora se limita a:
+#   - 1 posição aberta por símbolo (básico)
+#   - Correlação entre pares (War Room)
+#   - Stop/meta diários (sessão)
+# slope_threshold_pips — já estava removido (Slope Guard desativado nas Fases 1+2).
 
 # --- GERENCIAMENTO DE RISCO ---
-lot_size: 1.0                  # Lote por operação
-stop_buffer_points: 15         # Folga do Stop Loss
-breakeven_candles: 4           # Move SL para zero após X velas
-exit_candles_max: 8            # Fecha por tempo se não bater TP/SL
-entry_retracement_pct: 0.0     # 0.0 para entrar a Mercado imediatamente
+lot_size: 1.0                   # Lote fixo por operação
+stop_buffer_points: 50          # v6.1.3: 15 -> 50 (1.5p -> 5p). Motivo: SL muito apertado estava sendo
+                                #   estourado por varredura de liquidez típica antes da reversão.
+risk_reward_ratio: 1.5          # Take Profit = 1.5x Stop Loss
+breakeven_candles: 0            # v6.1.3: 7 -> 0 (DESATIVADO). Motivo: BE em 1h45 estava ejetando
+                                #   trades a zero em pullbacks normais antes da tese consolidar.
+                                #   Deixar TP/SL rodarem puros por algumas sessões para validar.
 
 # --- GESTÃO FINANCEIRA DIÁRIA ---
-daily_profit_target: 100.0     # Meta de lucro em USD (Encerra o dia)
-daily_max_loss: 150.0          # Limite de perda em USD (Proteção de capital)
+daily_profit_target: 1000.0      # Meta de lucro diário em USD
+daily_max_loss: 500.0           # Stop Loss diário em USD (encerra operações)
 
-# --- GOVERNANÇA AGÊNTICA ---
-use_agent_consensus: true      # Espera aprovação da Sala de Guerra (AIA)
-consensus_timeout_secs: 30     # Tempo de espera pelos agentes
-execution_mode: "market"       # Execução imediata conforme feedback trader
-magic_number: 123456
+# --- DISPLAY / LOGS ---
+# Offset do fuso horário do servidor MT5 em relação ao UTC (em horas).
+# Logs do bot e War Room usam esse fuso para que o timestamp do sinal
+# case exatamente com o que aparece no chart do MetaTrader.
+# Valores comuns:
+#   MetaQuotes Demo / ICMarkets / Pepperstone: +3 (EEST verão) / +2 (EET inverno)
+#   XM / FBS:                                   +2
+#   Para confirmar: MT5 > Tools > Options > Server > "Server time"
+mt5_server_utc_offset: 3
+
+# --- IDENTIFICAÇÃO ---
+magic_number: 123456            # Número mágico para identificação de trades
+
+# --- EXECUÇÃO ---
+execution_mode: "market"        # Modo de execução: market (imediato)
+filling_mode: "FOK"             # Fill or Kill (preço exato ou cancelamento)
+
+# ==========================================
+# PARÂMETROS DESCONTINUADOS (Retornados em v5.9.6)
+# ==========================================
+# Estes parâmetros foram removidos em v5.9.4 mas podem ser úteis:
+
+# exit_candles_max: 8           # Fechar trade por tempo se não bater TP/SL
+                                # Útil para: Evitar trades presos em lateralização
+                                # Viabilidade: MÉDIA - Pode fechar trades prematuramente
+                                # Recomendação: Testar com valor 10-12 candles (2.5-3h em M15)
+
+# zone_merge_points: 30         # Fundir zonas próximas em uma única zona consolidada
+                                # Útil para: Reduzir ruído, melhorar qualidade de sinais
+                                # Viabilidade: ALTA - Mas requer implementação de lógica
+                                # Recomendação: Implementar futuramente (não urgente)
+
+# entry_retracement_pct: 0.0    # Aguardar retração antes de entrar (0.0 = imediato)
+                                # Útil para: Melhorar preço médio de entrada
+                                # Viabilidade: BAIXA - Pode perder trades válidos
+                                # Recomendação: Manter 0.0 (execução imediata)
+
+# NOTA: cooldown_candles foi substituído por cooldown_hours (mais claro)
+# breakeven_candles já foi retornado (linha 41)
+
+# ==========================================
+# ROADMAP Fase 3 (v7.0) — NÃO ATIVAR AINDA
+# ==========================================
+# Quando implementar MA100 + MA200 H1 (item F do parecer):
+#   - DEVE ser SCORE-ONLY na War Room (peso máx 20pts)
+#   - NUNCA pode ser gate em bot_liquidez.check_trigger()
+#   - Nome da key: `use_macro_trend_score` (não ..._filter)
+#   - Razão: estratégia é contra-tendência; MA macro como gate
+#     repetiria o erro do antigo Slope Guard MA20 H1 (desativado v6.1.1)
+# Referência: feedback_strategy_macro_trend.md
+
+# RSI período 9 (item H do parecer) — IMPLEMENTADO em v6.1.3 (2026-04-22).
+# Promovido como default SEM A/B (decisão explícita do usuário).
+# Config key ativa na seção principal: rsi_period: 9

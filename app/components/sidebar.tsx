@@ -1,6 +1,6 @@
 "use client"
 
-import { Blocks, BarChart3, Rabbit, Container, Banknote, SquareArrowOutUpRight, Settings2, LogOut } from 'lucide-react'
+import { Blocks, BarChart3, Rabbit, Container, Banknote, Terminal, SquareArrowOutUpRight, Settings2, LogOut } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
@@ -25,6 +25,10 @@ export function Sidebar() {
         <Link href="/gatilhos" className={`flex items-center gap-4 transition-colors cursor-pointer ${pathname === '/gatilhos' ? 'text-[#E7E7E7]' : 'text-[#919191] hover:text-[#E7E7E7]'}`}>
           <Rabbit className="h-6 w-6" />
           <span className="text-sm font-medium tracking-wide">GATILHOS</span>
+        </Link>
+        <Link href="/logs" className={`flex items-center gap-4 transition-colors cursor-pointer ${pathname === '/logs' ? 'text-[#E7E7E7]' : 'text-[#919191] hover:text-[#E7E7E7]'}`}>
+          <Terminal className="h-6 w-6" />
+          <span className="text-sm font-medium tracking-wide">LOGS</span>
         </Link>
         <div className="flex items-center gap-4 text-[#919191] hover:text-[#E7E7E7] transition-colors cursor-pointer">
           <Banknote className="h-6 w-6" />
