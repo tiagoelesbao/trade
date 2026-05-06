@@ -25,8 +25,12 @@ try:
         _CFG = yaml.safe_load(_f) or {}
     _MT5_UTC_OFFSET = int(_CFG.get('mt5_server_utc_offset', 3))
 except Exception:
+    _CFG = {}
     _MT5_UTC_OFFSET = 3
 MT5_TZ = timezone(timedelta(hours=_MT5_UTC_OFFSET))
+
+# v6.2.0 Sprint 1 — score mínimo lido do config (antes hardcoded 55, drift de v6.1.x)
+MIN_CONFIDENCE_SCORE = int(_CFG.get('min_confidence_score', 75))
 
 
 def _now_mt5_ts() -> str:
@@ -41,17 +45,18 @@ LEVEL_PREFIX = {
     "SIGNAL":  "◈ ",
 }
 
-# Pesos máximos por critério (v6.1.2 — RSI alpha, Slope/Volume removidos)
+# Pesos máximos por critério (v6.2.0 Sprint 2 — 6 critérios com ICT Macro)
+# Total = 25 + 20 + 15 + 10 + 25 + 5 = 100
 SCORE_MAX = {
-    'rsi': 35, 'wick': 25, 'pin_bar': 20,
-    'session': 15, 'history': 5,
+    'rsi': 25, 'wick': 20, 'pin_bar': 15,
+    'session': 10, 'ict': 25, 'history': 5,
 }
 SCORE_LABELS = {
     'rsi':     'RSI    ', 'wick':    'Wick   ',
     'pin_bar': 'PinBar ', 'session': 'Sessao ',
-    'history': 'Hist   ',
+    'ict':     'ICT    ', 'history': 'Hist   ',
 }
-SCORE_KEYS_ORDER = ['rsi', 'wick', 'pin_bar', 'session', 'history']
+SCORE_KEYS_ORDER = ['rsi', 'wick', 'pin_bar', 'session', 'ict', 'history']
 
 def _mini_bar(pts, max_pts, width=14):
     filled = round((pts / max_pts) * width) if max_pts else 0
@@ -132,7 +137,8 @@ class SystemLogger:
         sl         = signal_info.get('sl', 0)
         tp         = signal_info.get('tp', 0)
         total      = round(sum(scores.values()), 1)
-        min_score  = 55  # importar do war room seria circular; mantemos aqui
+        # v6.2.0 Sprint 1: lê do config (antes hardcoded 55, defasado em relação ao war room)
+        min_score  = MIN_CONFIDENCE_SCORE
 
         ts = _now_mt5_ts()
 
@@ -165,11 +171,13 @@ class SystemLogger:
                 detail = f"pavio {wick_pct:.0f}%"
             elif key == 'pin_bar':
                 br = raw.get('body_ratio', 0)
-                q  = ("perfeito" if pts >= 17 else "bom" if pts >= 10
-                      else "aceitável" if pts >= 5 else "suja")
+                q  = ("perfeito" if pts >= 12 else "bom" if pts >= 8
+                      else "aceitável" if pts >= 4 else "suja")
                 detail = f"corpo {br:.0f}% range  [{q}]"
             elif key == 'session':
                 detail = raw.get('session', '?')
+            elif key == 'ict':
+                detail = f"D1={raw.get('ict_bias','?')} H4={raw.get('ict_h4','?')} H1={raw.get('ict_h1','?')}"
             elif key == 'history':
                 wr = raw.get('symbol_wr', 0)
                 ht = raw.get('hist_trades', 0)

@@ -50,8 +50,18 @@ __pycache__/
 *.pyc
 *.pyo
 
-# Bot state files
+# Bot state files (legacy v5.x — removido em v6.1.4)
 .consumed_zones.json
+
+# Trading runtime state (squad trade-liquidez-python — v6.2.0)
+squads/trade-liquidez-python/data/cooldowns.json
+squads/trade-liquidez-python/data/daily_state_*.json
+squads/trade-liquidez-python/data/terminal_logs/
+squads/trade-liquidez-python/data/trades/_runs/
+
+# AIOX session/handoff runtime
+.aiox/sessions/
+.aiox/handoffs/
 
 # Supabase
 .supabase/

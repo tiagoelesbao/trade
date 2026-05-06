@@ -1,0 +1,102 @@
+name: trade_analysis_workflow
+version: "1.0.0"
+description: >
+  Workflow de analise de trades por evidencias, com enriquecimento MT5 e
+  consolidacao multiagente.
+
+execution:
+  modes: [quick, full]
+  default_mode: full
+  fail_policy: continue_with_flags
+  required_global_keys: [run_id, created_at, schema_version]
+
+steps:
+  - id: bootstrap_context
+    inputs: [input_dir, mode, output_dir, run_id]
+    outputs: [contexto_execucao.json]
+    gate: context_created
+    fallback: fail_critical
+
+  - id: ingest_trade_assets
+    inputs: [input_dir]
+    outputs: [input_index.json, prints_index.json, logs_index.json]
+    gate: at_least_one_print
+    fallback: fail_critical
+
+  - id: build_trade_catalog
+    inputs: [prints_index.json]
+    outputs: [trade_catalog.json]
+    gate: trade_id_visual_unique
+    fallback: resolve_duplicates_and_warn
+
+  - id: pair_trade_with_warroom_logs
+    inputs: [trade_catalog.json, logs_index.json]
+    outputs: [trade_warroom_links.json]
+    gate: links_attempted_all_trades
+    fallback: low_confidence_link
+
+  - id: pair_trade_with_entry_logs
+    inputs: [trade_catalog.json, logs_index.json]
+    outputs: [trade_entry_links.json]
+    gate: traceability_minimum
+    fallback: entry_link_missing_flag
+
+  - id: resolve_trade_time_and_timezone
+    inputs: [trade_catalog.json, trade_warroom_links.json, trade_entry_links.json]
+    outputs: [trade_time_resolution.json]
+    gate: canonical_time_per_trade
+    fallback: low_confidence_time
+
+  - id: fetch_mt5_market_snapshot
+    inputs: [trade_time_resolution.json]
+    outputs: [market_snapshot_*.csv, market_snapshot_meta_*.json]
+    gate: m15_h1_or_partial_status
+    fallback: partial_snapshot_with_quality_flag
+
+  - id: build_trade_analysis_packet
+    inputs:
+      - trade_catalog.json
+      - trade_warroom_links.json
+      - trade_entry_links.json
+      - trade_time_resolution.json
+      - market_snapshot_meta_*.json
+    outputs: [analysis_packet.json]
+    gate: packet_ready_per_trade
+    fallback: packet_with_incomplete_flag
+
+  - id: run_agents_analysis
+    inputs: [analysis_packet.json, mode]
+    outputs: [analise/*_parecer.json, analise/*_parecer.md, analise/consenso_divergencia.json]
+    gate:
+      quick: ">=4_ok_or_partial_of_5"
+      full: ">=7_ok_or_partial_of_9"
+    fallback: analysis_incomplete
+
+  - id: consolidate_trade_report
+    inputs: [analysis_packet.json, analise/*.json, analise/consenso_divergencia.json]
+    outputs: [analise_consolidada.md, metadados_trade.json, analise/parecer_quality_gate.json]
+    gate: required_sections_present
+    fallback: draft_incomplete
+
+  - id: consolidate_day_report
+    inputs: [analise_consolidada.md, metadados_trade.json]
+    outputs:
+      - fechamento_dia.md
+      - resumo_quantitativo_dia.json
+      - resumo_qualitativo_dia.json
+      - pendencias_dia.json
+      - indice_trade_reports.json
+    gate: daily_report_complete
+    fallback: degraded_with_pending_list
+
+status_catalog:
+  step: [ok, warn, error]
+  agent: [ok, partial, inconclusive, error]
+  trade: [valid, valid_with_warnings, incomplete]
+  run: [success, degraded, failed]
+
+time_precedence:
+  - entry_execution_log
+  - war_room_log
+  - print_name
+  - manual_fallback_low_confidence

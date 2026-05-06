@@ -1,21 +1,25 @@
 # ==========================================
-# TRADE LIQUIDEZ - CONFIG v6.0
+# TRADE LIQUIDEZ - CONFIG v6.2.0-ict
 # Sincronizado com bot_liquidez.py + auto_war_room.py
-# Data: 2026-04-21
+# Data: 2026-04-28 (Sprint 1 — Limpeza ICT)
 # ==========================================
 
 # --- SÍMBOLOS OPERADOS ---
+# v6.2.0 (Sprint 1): EUR pausado conforme Aula 3 ICT
+#   "I would recommend you doing something apart from the British pound and the euro"
+#   EUR tem dinâmica diferente — instituições operam ele intensamente.
+# JPY já estava desativado por WR baixo (v6.1.x).
 symbols:
-  - EURUSD
-  - GBPUSD
-  # - USDJPY  # DESATIVADO: WR 42.1% (8/19), P&L -$232.29 | JPY tendência forte vs estratégia reversão
   - AUDUSD
+  - GBPUSD
   - USDCAD
   - USDCHF
   - NZDUSD
-  - EURGBP
-  # - EURJPY  # DESATIVADO: WR 16.7% (1/6), P&L -$85.56
-  # - GBPJPY  # DESATIVADO: BAIXO WINRATE
+  # - EURUSD  # PAUSADO v6.2.0 (Sprint 1) — ICT recomenda evitar EUR
+  # - EURGBP  # PAUSADO v6.2.0 (Sprint 1) — ICT recomenda evitar EUR
+  # - USDJPY  # DESATIVADO v6.1.x: WR 42.1%, P&L -$232 (JPY tendência forte vs estratégia reversão)
+  # - EURJPY  # DESATIVADO v6.1.x: WR 16.7%, P&L -$85
+  # - GBPJPY  # DESATIVADO v6.1.x: BAIXO WINRATE
 
 # --- TIMEFRAME E ZONAS ---
 zone_timeframe: "M15"           # Timeframe para detecção de zonas (15 minutos)
@@ -24,29 +28,37 @@ min_displacement_candles: 7     # Confirmação de zona: 7 candles de afastament
 
 # --- FILTROS DE ENTRADA (SNIPER) ---
 min_wick_pct: 0.30              # Pavio mínimo: 30% da vela total
-rsi_period: 9                   # v6.1.3: promovido sem A/B (item H do parecer, clássico mais reativo)
+rsi_period: 14                  # v6.2.0 Sprint 6 (30/04): 9 -> 14. RSI(14) é o default
+                                #   original de Wilder e do MetaTrader 5. Alinha com
+                                #   o que o operador vê no chart e suaviza ainda mais
+                                #   o efeito de spikes (RSI(9) era reativo demais
+                                #   em vela morta de Asia early).
 rsi_overbought: 70              # RSI acima deste valor = sobrecompra (SELL)
 rsi_oversold: 30                # RSI abaixo deste valor = sobrevenda (BUY)
-use_trend_filter: false         # DESATIVADO v6.1.1 — trader feedback: slope invertido p/ contra-tendência
-require_color_reversal: false   # DESATIVADO v6.1.1 — trader feedback: atrasa entrada no ponto ótimo
+# v6.2.0 Sprint 5: filtro de range mínimo da vela do gatilho. Evita disparos em
+# Asia early com vela de 1-2 pips onde o RSI fica errático (qualquer micro-direcional
+# vira "extremo"). 3 pips = mínimo defensivo. 0 = desabilitado.
+min_candle_range_pips: 3.0
+# v6.2.0: removidos use_trend_filter e require_color_reversal (eram dead code,
+# desativados na Fase 1+2 e nunca reativados — Slope MA20 H1 não fazia sentido
+# numa estratégia contra-tendência).
+# v6.2.0 Sprint 5: cálculo do RSI alinhado com MetaTrader 5 (Wilder's SMMA, não SMA).
 
 # --- PROTEÇÕES OPERACIONAIS ---
 # Kill-Zone (cooldown_hours / proximity_pips) e One-Shot de zonas REMOVIDOS em v6.1.4
 # (decisão do trader, 2026-04-22): estavam privando bons trades sem sinal de benefício
 # estatístico. Proteção pós-trade agora se limita a:
 #   - 1 posição aberta por símbolo (básico)
-#   - Correlação entre pares (War Room)
+#   - Correlação entre pares (War Room — ampliada na v6.2.0)
 #   - Stop/meta diários (sessão)
-# slope_threshold_pips — já estava removido (Slope Guard desativado nas Fases 1+2).
+#   - Janelas de sessão ICT (NEW v6.2.0 — ver session_windows abaixo)
 
 # --- GERENCIAMENTO DE RISCO ---
 lot_size: 1.0                   # Lote fixo por operação
-stop_buffer_points: 50          # v6.1.3: 15 -> 50 (1.5p -> 5p). Motivo: SL muito apertado estava sendo
-                                #   estourado por varredura de liquidez típica antes da reversão.
+stop_buffer_points: 50          # 5 pips. Buffer acima/abaixo do pavio.
 risk_reward_ratio: 1.5          # Take Profit = 1.5x Stop Loss
-breakeven_candles: 0            # v6.1.3: 7 -> 0 (DESATIVADO). Motivo: BE em 1h45 estava ejetando
-                                #   trades a zero em pullbacks normais antes da tese consolidar.
-                                #   Deixar TP/SL rodarem puros por algumas sessões para validar.
+breakeven_candles: 0            # v6.1.3: DESATIVADO no bot. v6.2.0: BE migrará para
+                                # o Exit War Room (Sprint 4) com regras dinâmicas.
 
 # --- GESTÃO FINANCEIRA DIÁRIA ---
 daily_profit_target: 1000.0      # Meta de lucro diário em USD
@@ -62,6 +74,57 @@ daily_max_loss: 500.0           # Stop Loss diário em USD (encerra operações)
 #   Para confirmar: MT5 > Tools > Options > Server > "Server time"
 mt5_server_utc_offset: 3
 
+# --- WAR ROOM (scoring) ---
+# v6.2.0 Sprint 1: 65 -> 75. Trades com score <75 em 27-28/04 foram majoritariamente losers.
+# Quando ICT Context Engine entrar (Sprint 2) e adicionar 25 pts de macro, podemos reavaliar.
+min_confidence_score: 60
+
+# --- COOLDOWN DIRECIONAL POS-LOSS (Sprint 6) ---
+# Após loss confirmado em (symbol, direction), bloqueia novas entradas na MESMA
+# combinação por N horas. Resolve cluster de losses consecutivos no mesmo par/direção
+# (visto em 30/04: 3 USDCHF BUY losses seguidos em 2h).
+#
+# A 4ª tentativa de USDCHF BUY (após 3h) foi WIN — o cooldown 4h teria evitado os
+# 3 losses (-$353) e capturado o win (+$66). Saldo teórico: -$112 vs -$287.
+cooldown_after_loss_enabled: true
+cooldown_hours_after_loss: 4.0     # bloqueia (symbol, direction) por N horas após loss
+cooldown_min_loss_pnl: -10.0       # só ativa se loss > este valor (USD); evita BE-stops triviais
+
+# --- WAR ROOM v2 (Pool-then-Pick) — Sprint 3 ---
+# Quando vários sinais correlatos disparam, War Room espera essa janela antes de
+# escolher o melhor (por ICT alignment, depois score). Trade-off:
+#   - Pool muito curto (10s)  : cluster do bot 1 ciclo (20s) escapa, vira "first-match"
+#   - Pool 30s (default)      : pega 1.5 ciclos do bot — captura clusters típicos
+#   - Pool 60s+               : adiciona latência sem ganho proporcional
+# Bot tem ciclo de 20s e flag trade_executed_this_cycle (1 sinal/par/ciclo). Sinais
+# correlatos chegam separados por ~20-40s. 30s captura ~80% dos clusters com latência tolerável.
+cluster_pool_window_seconds: 30
+cluster_pool_poll_seconds: 3      # frequência de re-fetch do pending durante a espera
+
+# --- EXIT WAR ROOM (Sprint 4) — gestão dinâmica de saída ---
+# 4º terminal monitora posições abertas em real-time e aplica regras de exit em
+# ordem de prioridade. Substitui o check_breakeven legado do bot (BREAKEVEN_CANDLES=0).
+#
+# Ordem das regras (primeira que matchar vence):
+#   a) profit >= 1.0R                                    -> BE imediato (sem condição extra)
+#   b) profit >= 0.7R E reversal candle ICT detectada    -> close 50% + BE no resto
+#   c) profit >= 0.5R E 3 candles a favor E RSI cruzou 50-> BE clássico
+#   d) profit > 0 E TP atingiu liquidity level oposto    -> close cedo (raid completo)
+#   e) profit < 0 E ICT structure break contra trade     -> close imediato (limita perda)
+#   f) 6 candles M15 abertos sem progresso (range<0.3R)  -> flag para revisão (não fecha)
+exit_war_room:
+  enable_be_at_1R: true
+  enable_partial_at_07R_reversal: true
+  enable_classic_be: true
+  enable_liquidity_target_close: true
+  enable_structure_break_close: true
+  enable_time_exit_flag: true
+  monitor_interval_seconds: 10        # ciclo do exit war room (mais rápido que bot — 10s)
+  partial_close_pct: 0.50              # quando a regra (b) dispara, fecha 50% e move BE
+  be_buffer_pips: 0.2                  # 2 pontos acima/abaixo da entrada (proteção spread)
+  time_exit_lookback_candles: 6        # quantas velas M15 para flagar "sem progresso"
+  time_exit_min_progress_R: 0.3        # se range entre velas < esse R, é "stuck"
+
 # --- IDENTIFICAÇÃO ---
 magic_number: 123456            # Número mágico para identificação de trades
 
@@ -70,39 +133,63 @@ execution_mode: "market"        # Modo de execução: market (imediato)
 filling_mode: "FOK"             # Fill or Kill (preço exato ou cancelamento)
 
 # ==========================================
-# PARÂMETROS DESCONTINUADOS (Retornados em v5.9.6)
+# v6.2.0 — JANELAS DE SESSÃO ICT (Sprint 1)
 # ==========================================
-# Estes parâmetros foram removidos em v5.9.4 mas podem ser úteis:
+# Baseado na Aula 2 ICT (Daily Range Algorithm) + dados 23-28/04.
+# Todas as janelas em UTC (24h). Pesos usados pelo War Room scoring.
+# Max session score = 15 (mantém soma 100 com outros critérios).
+#
+# Mapa do dia ICT (UTC):
+#   21-04  Asia consolidation (early 21-23 = exhaustion real, depois cuidado)
+#   04-07  Judas Swing zone   (manipulação pré-London — NEWS DRIVEN)
+#   07-10  London open expansion (forma high/low do dia)
+#   10-13  London continuation
+#   13-13:30 NY 8-8:30 news embargo (BLOCKED)
+#   13-15  NY open expansion
+#   15-16  London close reversal
+#   16-21  NY afternoon → end-of-day consolidation
+#
+# Confirma com dados:
+#   Dia 27: trades 01-02h (Judas) = 4 losses; 06-08h (London open MT5+3 = 03-05 UTC)
+#           que estava no Judas zone também perdeu.
+#   Dia 28: 10:11-11:31 UTC (mid-London) = 6 losses consecutivos com macro contra
+#           — sessão sozinha não filtra esse padrão; precisa do ICT context (Sprint 2).
+session_windows:
+  asia_early:        { start: 21, end: 24, weight: 8,  label: "Asia early (post-NY)" }
+  asia_judas:        { start:  0, end:  7, weight: 1,  label: "Asia continuation/Judas" }
+  london_open:       { start:  7, end: 10, weight: 14, label: "London open expansion" }
+  london_cont:       { start: 10, end: 13, weight: 11, label: "London continuation" }
+  ny_news_embargo:   { start: 13, end: 14, weight: 0,  label: "NY 8-8:30 news embargo" }   # 13:00-13:30
+  ny_expansion:      { start: 14, end: 15, weight: 13, label: "NY open expansion" }
+  london_close:      { start: 15, end: 16, weight: 12, label: "London close reversal" }
+  ny_afternoon:      { start: 16, end: 21, weight: 7,  label: "NY afternoon / end-of-day" }
+# Observações:
+# - news embargo: weight 0 + bloqueio explícito no bot (gate, não score)
+# - asia_judas: weight 1 — quase desclassifica entradas; combinado com cluster filter mata
+#   exatamente os losses de 27/04 01-02h.
+# - end_session_block aplicado pelo entry_cutoff abaixo
 
-# exit_candles_max: 8           # Fechar trade por tempo se não bater TP/SL
-                                # Útil para: Evitar trades presos em lateralização
-                                # Viabilidade: MÉDIA - Pode fechar trades prematuramente
-                                # Recomendação: Testar com valor 10-12 candles (2.5-3h em M15)
-
-# zone_merge_points: 30         # Fundir zonas próximas em uma única zona consolidada
-                                # Útil para: Reduzir ruído, melhorar qualidade de sinais
-                                # Viabilidade: ALTA - Mas requer implementação de lógica
-                                # Recomendação: Implementar futuramente (não urgente)
-
-# entry_retracement_pct: 0.0    # Aguardar retração antes de entrar (0.0 = imediato)
-                                # Útil para: Melhorar preço médio de entrada
-                                # Viabilidade: BAIXA - Pode perder trades válidos
-                                # Recomendação: Manter 0.0 (execução imediata)
-
-# NOTA: cooldown_candles foi substituído por cooldown_hours (mais claro)
-# breakeven_candles já foi retornado (linha 41)
+# --- v6.2.0 — Cutoff e news embargo (gates explícitos, não score) ---
+# entry_cutoff_hour_mt5: hora MT5 a partir da qual NOVAS entradas são bloqueadas
+#   (posições abertas continuam sob gestão do Exit War Room — Sprint 4).
+#   22 MT5 = 19 UTC = início do end-of-day consolidation (ICT Aula 2).
+#   Configurável: trader pode subir/descer conforme observação empírica.
+entry_cutoff_hour_mt5: 22       # 19 UTC — pausa entradas após NY core
+# news_embargo_pause: True bloqueia entradas em NY 8:00-8:30 (= MT5 16:00-16:30 = UTC 13:00-13:30)
+news_embargo_pause: true
+news_embargo_start_utc: 13      # inclusive (13:00 UTC = 8:00 NY)
+news_embargo_end_utc: 14        # exclusive (cobre 13:00-13:59 = janela conservadora de 1h
+                                # cobrindo o release + reaction. Pode estreitar para 13:30 depois.)
 
 # ==========================================
-# ROADMAP Fase 3 (v7.0) — NÃO ATIVAR AINDA
+# PARÂMETROS DESCONTINUADOS / ROADMAP
 # ==========================================
-# Quando implementar MA100 + MA200 H1 (item F do parecer):
-#   - DEVE ser SCORE-ONLY na War Room (peso máx 20pts)
-#   - NUNCA pode ser gate em bot_liquidez.check_trigger()
-#   - Nome da key: `use_macro_trend_score` (não ..._filter)
-#   - Razão: estratégia é contra-tendência; MA macro como gate
-#     repetiria o erro do antigo Slope Guard MA20 H1 (desativado v6.1.1)
-# Referência: feedback_strategy_macro_trend.md
-
-# RSI período 9 (item H do parecer) — IMPLEMENTADO em v6.1.3 (2026-04-22).
-# Promovido como default SEM A/B (decisão explícita do usuário).
-# Config key ativa na seção principal: rsi_period: 9
+# v6.3.0 (Sprint 2): ICT Context Engine substitui MA100/MA200.
+#   Nada para configurar aqui agora — quando Sprint 2 deployar, vão entrar:
+#     ict_context: { enable: true, cache_seconds: 300, weight_alignment: 25 }
+#
+# v6.4.0 (Sprint 3): War Room v2 com pool + tie-breaker direcional.
+#     cluster_pool_window_seconds: 30
+#
+# v6.5.0 (Sprint 4): Exit War Room — BE/exit dinâmicos.
+#     exit_war_room: { enable_be_at_1R: true, ... }

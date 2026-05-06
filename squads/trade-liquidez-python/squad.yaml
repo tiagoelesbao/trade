@@ -4,3 +4,62 @@ description: "Squad de Trading Automático via API Python/MT5 para B3 (WIN). Est
 version: "1.0.0"
 author: "Craft (Squad-Creator)"
 
+assets:
+  agents_dir: "./agents"
+  tasks_dir: "./tasks"
+  workflows_dir: "./workflows"
+  templates_dir: "./templates"
+  checklists_dir: "./checklists"
+  scripts_dir: "./scripts"
+
+trade_analysis:
+  enabled: true
+  runner: "./scripts/runner_analisar_trades.bat"
+  workflow: "./workflows/trade_analysis_workflow.yaml"
+  modes:
+    - quick
+    - full
+  status_catalog:
+    step: ["ok", "warn", "error"]
+    agent: ["ok", "partial", "inconclusive", "error"]
+    trade: ["valid", "valid_with_warnings", "incomplete"]
+    run: ["success", "degraded", "failed"]
+
+agents:
+  - id: huddleston_ict
+    name: "Agente Huddleston (ICT/SMC)"
+    role: "Analista de Liquidez e Estrutura"
+    description: "Foco em leitura estrutural de liquidez, sweep, displacement e contexto de zona."
+  - id: simons_quant
+    name: "Agente Simons (Quant Score)"
+    role: "Auditor Estatistico"
+    description: "Coerencia quantitativa do setup (RSI/wick/pin/session/history)."
+  - id: taleb_risk
+    name: "Agente Taleb (Risco e Cauda)"
+    role: "Gestor de Fragilidade"
+    description: "Analise de assimetria, risco de ruina e robustez defensiva."
+  - id: dalio_portfolio
+    name: "Agente Dalio (Portfolio e Correlacao)"
+    role: "Estrategista de Alocacao"
+    description: "Analise de correlacao entre pares e concentracao de risco na sessao."
+  - id: kahneman_process
+    name: "Agente Kahneman (Processo e Vies)"
+    role: "Auditor de Decisao"
+    description: "Qualidade da decisao vs resultado, vieses cognitivos e disciplina."
+  - id: soros_regime
+    name: "Agente Soros (Regime e Reflexividade)"
+    role: "Analista de Regime"
+    description: "Adequacao do setup ao regime de mercado no momento da operacao."
+  - id: chan_systems
+    name: "Agente Chan (Engenharia de Sistema)"
+    role: "Validador Metodologico"
+    description: "Qualidade metodológica de validacao algoritmica sem overfitting."
+  - id: davey_validation
+    name: "Agente Davey (Validacao Pratica)"
+    role: "Certificador de Robustez"
+    description: "Reprodutibilidade operacional e criterios de promocao de ajuste."
+  - id: lopezdeprado_research
+    name: "Agente Lopez de Prado (Pesquisa Robusta)"
+    role: "Cientista de Dados Financeiros"
+    description: "Analise de data snooping, leakage e rigor da inferencia."
+
